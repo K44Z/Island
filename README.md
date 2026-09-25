@@ -59,4 +59,3 @@ gnome-extensions prefs island@k44z                   # settings window
 | Switch player | Super+Ctrl+P |
 
 All of them can be changed in the settings window.
-# Island
