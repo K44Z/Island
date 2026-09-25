@@ -8,9 +8,7 @@ album, a seekable progress bar, previous / play-pause / next, ±N second seek,
 shuffle, repeat and a switcher when several players are running.
 Middle-click the pill to play/pause. It hides when nothing is playing.
 
-<video src="assets/demo.mp4" controls muted loop width="744"></video>
-
-[Watch the demo](assets/demo.mp4)
+![Island demo](assets/demo.gif)
 
 ## Files
 
