@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist gettext-domain="island">
+  <enum id="org.gnome.shell.extensions.island.placement">
+    <value nick="below-top-bar" value="0"/>
+    <value nick="top-bar" value="1"/>
+  </enum>
+
+  <schema id="org.gnome.shell.extensions.island" path="/org/gnome/shell/extensions/island/">
+    <key name="seek-step" type="i">
+      <range min="1" max="60"/>
+      <default>5</default>
+      <summary>Seconds to skip when seeking forward or backward</summary>
+    </key>
+    <key name="placement" enum="org.gnome.shell.extensions.island.placement">
+      <default>'below-top-bar'</default>
+      <summary>Where the island sits</summary>
+      <description>below-top-bar floats just under the top bar; top-bar sits inside the top bar and slides the clock aside while media is playing.</description>
+    </key>
+    <key name="clock-left" type="b">
+      <default>false</default>
+      <summary>Move the date and time to the left side of the top bar</summary>
+    </key>
+    <key name="expand-on-hover" type="b">
+      <default>true</default>
+      <summary>Expand when the pointer hovers the island (otherwise expand on click)</summary>
+    </key>
+    <key name="hide-when-paused" type="b">
+      <default>true</default>
+      <summary>Hide the island a few seconds after every player is paused</summary>
+    </key>
+
+    <key name="toggle-island" type="as">
+      <default><![CDATA[['<Super><Control>m']]]></default>
+      <summary>Expand or collapse the island</summary>
+    </key>
+    <key name="play-pause" type="as">
+      <default><![CDATA[['<Super><Control>space']]]></default>
+      <summary>Play or pause</summary>
+    </key>
+    <key name="previous-track" type="as">
+      <default><![CDATA[['<Super><Control>comma']]]></default>
+      <summary>Previous track</summary>
+    </key>
+    <key name="next-track" type="as">
+      <default><![CDATA[['<Super><Control>period']]]></default>
+      <summary>Next track</summary>
+    </key>
+    <key name="seek-backward" type="as">
+      <default><![CDATA[['<Super><Control>Left']]]></default>
+      <summary>Seek backward</summary>
+    </key>
+    <key name="seek-forward" type="as">
+      <default><![CDATA[['<Super><Control>Right']]]></default>
+      <summary>Seek forward</summary>
+    </key>
+    <key name="next-player" type="as">
+      <default><![CDATA[['<Super><Control>p']]]></default>
+      <summary>Switch to the next player</summary>
+    </key>
+  </schema>
+</schemalist>

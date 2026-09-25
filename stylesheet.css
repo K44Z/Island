@@ -1,0 +1,222 @@
+.island {
+  background-color: #000;
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.island-compact {
+  padding: 0 10px 0 6px;
+  border-radius: 999px;
+}
+
+.island-compact-box {
+  spacing: 9px;
+}
+
+.island-compact-title {
+  font-size: 10.5pt;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.island-eq {
+  spacing: 2px;
+  height: 14px;
+}
+
+.island-eq-bar {
+  width: 3px;
+  height: 14px;
+  border-radius: 2px;
+  background-color: -st-accent-color;
+}
+
+.island-art {
+  background-color: #262626;
+  background-size: cover;
+}
+
+.island-art-small {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+}
+
+.island-art-small .island-art-placeholder {
+  icon-size: 12px;
+}
+
+.island-art-button {
+  border-radius: 14px;
+  transition-duration: 150ms;
+}
+
+.island-art-button:hover .island-art {
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.35);
+}
+
+.island-art-large {
+  width: 64px;
+  height: 64px;
+  border-radius: 14px;
+}
+
+.island-art-large .island-art-placeholder {
+  icon-size: 28px;
+}
+
+.island-art-placeholder {
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.island-expanded {
+  padding: 18px 20px 14px;
+  spacing: 12px;
+}
+
+.island-header {
+  spacing: 14px;
+}
+
+.island-text {
+  spacing: 2px;
+}
+
+.island-title {
+  font-size: 12pt;
+  font-weight: bold;
+}
+
+.island-artist {
+  font-size: 10.5pt;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.island-album {
+  font-size: 9.5pt;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.island-app-icon {
+  icon-size: 22px;
+}
+
+.island-progress-box {
+  spacing: 2px;
+}
+
+.slider.island-progress {
+  height: 14px;
+  -barlevel-height: 5px;
+  -barlevel-background-color: rgba(255, 255, 255, 0.18);
+  -barlevel-active-background-color: rgba(255, 255, 255, 0.9);
+  -slider-handle-radius: 0;
+  color: #fff;
+}
+
+.slider.island-progress:hover {
+  -barlevel-height: 7px;
+  -slider-handle-radius: 6px;
+}
+
+.island-time {
+  font-size: 8.5pt;
+  font-feature-settings: "tnum";
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.island-controls {
+  spacing: 6px;
+}
+
+.island-button {
+  border-radius: 999px;
+  padding: 7px;
+  color: #fff;
+  transition-duration: 150ms;
+}
+
+.island-button:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.island-button:active {
+  background-color: rgba(255, 255, 255, 0.18);
+}
+
+.island-button:insensitive {
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.island-skip-icon {
+  icon-size: 24px;
+}
+
+.island-play {
+  padding: 9px;
+}
+
+.island-play-icon {
+  icon-size: 32px;
+}
+
+.island-toggle {
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.island-toggle-icon {
+  icon-size: 16px;
+}
+
+.island-toggle:checked {
+  color: -st-accent-color;
+}
+
+.island-seek-icon {
+  icon-size: 26px;
+}
+
+.island-seek-label {
+  font-size: 6.5pt;
+  font-weight: 800;
+  padding-top: 2px;
+}
+
+.island-app-button {
+  padding: 4px;
+}
+
+.island-switcher {
+  spacing: 6px;
+}
+
+.island-chip {
+  border-radius: 999px;
+  padding: 4px 10px 4px 6px;
+  background-color: rgba(255, 255, 255, 0.07);
+  color: rgba(255, 255, 255, 0.7);
+  transition-duration: 150ms;
+}
+
+.island-chip:hover {
+  background-color: rgba(255, 255, 255, 0.14);
+}
+
+.island-chip:checked {
+  background-color: rgba(255, 255, 255, 0.22);
+  color: #fff;
+}
+
+.island-chip-box {
+  spacing: 6px;
+}
+
+.island-chip-icon {
+  icon-size: 16px;
+}
+
+.island-chip-label {
+  font-size: 9pt;
+  max-width: 90px;
+}

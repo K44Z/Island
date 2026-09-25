@@ -1,0 +1,8 @@
+{
+  "uuid": "island@k44z",
+  "name": "Island",
+  "description": "A Dynamic Island style media controller. Shows what is playing, with play/pause, next/previous, seeking, volume, shuffle/repeat and a switcher for multiple players.",
+  "shell-version": ["50"],
+  "settings-schema": "org.gnome.shell.extensions.island",
+  "url": ""
+}
