@@ -19,7 +19,24 @@
   font-weight: bold;
   font-feature-settings: "tnum";
   color: #fff;
-  padding-left: 6px;
+}
+
+.island-compact-time-button {
+  padding: 3px 8px;
+  border-radius: 999px;
+  transition-duration: 150ms;
+}
+
+.island-compact-time-button:hover {
+  background-color: rgba(255, 255, 255, 0.12);
+}
+
+.island-compact-time-button:active {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+.island-compact-media-box {
+  spacing: 9px;
 }
 
 .island-compact-title {
@@ -269,6 +286,99 @@
 
 .island-notification-action:active {
   background-color: rgba(255, 255, 255, 0.26);
+}
+
+.island-calendar {
+  padding: 12px 14px 16px;
+  spacing: 6px;
+}
+
+.island-calendar .calendar,
+.island-calendar .calendar:hover,
+.island-calendar .calendar:active,
+.island-calendar .calendar:focus {
+  background-color: transparent;
+  box-shadow: none;
+}
+
+.island-calendar .calendar .calendar-day,
+.island-calendar .calendar .calendar-day-heading,
+.island-calendar .calendar .calendar-month-header .calendar-month-label,
+.island-calendar .calendar .calendar-month-header .pager-button {
+  color: #fff !important;
+  background-color: transparent;
+}
+
+.island-calendar .calendar .calendar-day:hover,
+.island-calendar .calendar .calendar-month-header .calendar-month-label:hover,
+.island-calendar .calendar .calendar-month-header .pager-button:hover {
+  background-color: rgba(255, 255, 255, 0.12);
+}
+
+.island-calendar .calendar .calendar-day:selected,
+.island-calendar .calendar .calendar-day:active {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+.island-calendar .calendar .calendar-day-heading {
+  color: rgba(255, 255, 255, 0.5) !important;
+}
+
+.island-calendar .calendar .calendar-day.calendar-weekend {
+  color: rgba(255, 255, 255, 0.65) !important;
+}
+
+.island-calendar .calendar .calendar-day.calendar-other-month {
+  color: rgba(255, 255, 255, 0.3) !important;
+}
+
+.island-calendar .calendar .calendar-day.calendar-today {
+  color: -st-accent-fg-color !important;
+  background-color: -st-accent-color;
+}
+
+.island-calendar .calendar .calendar-week-number {
+  color: rgba(255, 255, 255, 0.45);
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+.island-events-title {
+  font-size: 9.5pt;
+  font-weight: bold;
+  color: rgba(255, 255, 255, 0.6);
+  padding: 8px 6px 2px;
+}
+
+.island-events-list {
+  spacing: 6px;
+  padding: 0 6px;
+}
+
+.island-event {
+  spacing: 10px;
+}
+
+.island-event-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 3px;
+  background-color: -st-accent-color;
+}
+
+.island-event-summary {
+  font-size: 10pt;
+  font-weight: 600;
+  color: #fff;
+}
+
+.island-event-time {
+  font-size: 9pt;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.island-event-empty {
+  font-size: 10pt;
+  color: rgba(255, 255, 255, 0.45);
 }
 
 .island-switcher {

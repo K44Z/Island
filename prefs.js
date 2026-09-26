@@ -16,6 +16,7 @@ const SHORTCUTS = [
     ['seek-backward', () => _('Seek backward')],
     ['seek-forward', () => _('Seek forward')],
     ['next-player', () => _('Switch player')],
+    ['toggle-calendar', () => _('Calendar')],
 ];
 
 const ShortcutRow = GObject.registerClass(
@@ -113,13 +114,6 @@ export default class IslandPreferences extends ExtensionPreferences {
         placement.connect('notify::selected', () =>
             settings.set_string('placement', PLACEMENTS[placement.selected]));
         behavior.add(placement);
-
-        const clockLeft = new Adw.SwitchRow({
-            title: _('Clock on the left'),
-            subtitle: _('Move the date and time to the left side of the top bar'),
-        });
-        settings.bind('clock-left', clockLeft, 'active', Gio.SettingsBindFlags.DEFAULT);
-        behavior.add(clockLeft);
 
         const notifications = new Adw.SwitchRow({
             title: _('Notifications in the island'),

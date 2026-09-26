@@ -9,27 +9,31 @@ import Shell from 'gi://Shell';
 import St from 'gi://St';
 
 import * as GrabHelper from 'resource:///org/gnome/shell/ui/grabHelper.js';
+import * as Calendar from 'resource:///org/gnome/shell/ui/calendar.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as MessageTray from 'resource:///org/gnome/shell/ui/messageTray.js';
 import * as Slider from 'resource:///org/gnome/shell/ui/slider.js';
 import {gettext as _} from 'resource:///org/gnome/shell/extensions/extension.js';
+import {formatDateWithCFormatString, formatTime as formatClockTime} from 'resource:///org/gnome/shell/misc/dateUtils.js';
 
 import {ArtCache} from './art.js';
 import {byName} from './mpris.js';
 
-const COMPACT_WIDTH = 236;
-const COMPACT_TIME_WIDTH = 64;
+const COMPACT_TITLE_MIN = 24;
+const COMPACT_TITLE_MAX = 280;
 const COMPACT_HEIGHT = 34;
 const EXPANDED_WIDTH = 400;
 const EXPANDED_RADIUS = 28;
 const PANEL_GAP = 6;
 
 const EXPAND_DURATION = 420;
+const SETTLE_OVERSHOOT = 0.04;
 const COLLAPSE_DURATION = 320;
 const HOVER_EXPAND_DELAY = 120;
 const HOVER_COLLAPSE_DELAY = 350;
 
 const AUTO_COLLAPSE_DELAY = 4000;
+const CALENDAR_AUTO_COLLAPSE_DELAY = 10000;
 
 const PAUSED_HIDE_DELAY = 8000;
 
@@ -158,6 +162,7 @@ class Island extends St.Widget {
         this._expanded = false;
         this._mediaWanted = false;
         this._notification = null;
+        this._calendarRequested = false;
         this._dragging = false;
         this._pausedLongEnough = false;
         this._player = null;
@@ -178,7 +183,6 @@ class Island extends St.Widget {
             'current-changed', () => this._onCurrentChanged(), this);
         this._settings.connectObject(
             'changed::placement', () => this._updateGeometry(),
-            'changed::clock-left', () => this._placeClock(),
             'changed::seek-step', () => this._syncSeekLabels(),
             'changed::hide-when-paused', () => this._updateVisibility(),
             'changed::show-notifications', () => {
@@ -190,7 +194,7 @@ class Island extends St.Widget {
         Main.panel.connectObject('notify::height',
             () => this._updateGeometry(), this);
 
-        Main.sessionMode.connectObject('updated', () => this._placeClock(), this);
+        Main.sessionMode.connectObject('updated', () => this._updateClock(false), this);
         St.ThemeContext.get_for_stage(global.stage).connectObject('notify::scale-factor',
             () => this._updateGeometry(), this);
         global.display.connectObject('in-fullscreen-changed',
@@ -201,7 +205,6 @@ class Island extends St.Widget {
     }
 
     start() {
-        this._placeClock();
         this._updateGeometry();
         this._syncSeekLabels();
         this._onCurrentChanged();
@@ -220,6 +223,114 @@ class Island extends St.Widget {
         this._buildCompact();
         this._buildExpanded();
         this._buildNotification();
+        this._buildCalendar();
+    }
+
+    _buildCalendar() {
+        this._calendarBox = new St.BoxLayout({
+            style_class: 'island-calendar',
+            orientation: Clutter.Orientation.VERTICAL,
+            x_align: Clutter.ActorAlign.CENTER,
+            y_align: Clutter.ActorAlign.START,
+            opacity: 0,
+            visible: false,
+        });
+        this._clip.add_child(this._calendarBox);
+
+        this._eventSource = Main.sessionMode.showCalendarEvents
+            ? new Calendar.DBusEventSource()
+            : new Calendar.EmptyEventSource();
+        this._eventSource.connectObject('changed', () => this._reloadEvents(), this);
+
+        this._calendar = new Calendar.Calendar();
+        this._calendar.setEventSource(this._eventSource);
+        this._calendar.connect('selected-date-changed',
+            (_calendar, datetime) => this._showEvents(new Date(datetime.to_unix() * 1000)));
+        this._calendarBox.add_child(this._calendar);
+
+        this._eventsTitle = new St.Label({style_class: 'island-events-title'});
+        this._calendarBox.add_child(this._eventsTitle);
+
+        this._eventsList = new St.BoxLayout({
+            style_class: 'island-events-list',
+            orientation: Clutter.Orientation.VERTICAL,
+        });
+        this._calendarBox.add_child(this._eventsList);
+
+        const now = new Date();
+        this._eventsDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    }
+
+    _resetCalendar() {
+        const today = new Date();
+        this._calendar.setDate(today);
+        this._showEvents(today);
+    }
+
+    _showEvents(date) {
+        this._eventsDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+        this._reloadEvents();
+    }
+
+    _reloadEvents() {
+        const start = this._eventsDate;
+        const end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 1);
+        const today = new Date();
+        const midnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+        const dayDiff = Math.round((start - midnight) / 86400000);
+
+        if (dayDiff === 0)
+            this._eventsTitle.text = _('Today');
+        else if (dayDiff === 1)
+            this._eventsTitle.text = _('Tomorrow');
+        else if (dayDiff === -1)
+            this._eventsTitle.text = _('Yesterday');
+        else
+            this._eventsTitle.text = formatDateWithCFormatString(start, '%A, %B %-d');
+
+        this._eventsList.destroy_all_children();
+        const events = this._eventSource.getEvents(start, end);
+        for (const event of events) {
+            const row = new St.BoxLayout({style_class: 'island-event'});
+            row.add_child(new St.Widget({
+                style_class: 'island-event-dot',
+                y_align: Clutter.ActorAlign.CENTER,
+            }));
+            const text = new St.BoxLayout({
+                orientation: Clutter.Orientation.VERTICAL,
+                x_expand: true,
+            });
+            const summary = new St.Label({
+                style_class: 'island-event-summary',
+                text: event.summary ?? '',
+            });
+            summary.clutter_text.ellipsize = Pango.EllipsizeMode.END;
+            text.add_child(summary);
+            text.add_child(new St.Label({
+                style_class: 'island-event-time',
+                text: this._formatEventTime(event, start, end),
+            }));
+            row.add_child(text);
+            this._eventsList.add_child(row);
+        }
+
+        if (events.length === 0) {
+            this._eventsList.add_child(new St.Label({
+                style_class: 'island-event-empty',
+                text: _('No events'),
+            }));
+        }
+
+        if (this._view === 'calendar')
+            this._resize(true);
+    }
+
+    _formatEventTime(event, dayStart, dayEnd) {
+        if (event.date <= dayStart && event.end >= dayEnd)
+            return _('All day');
+        const from = formatClockTime(event.date, {timeOnly: true});
+        const to = formatClockTime(event.end, {timeOnly: true});
+        return event.date.getTime() === event.end.getTime() ? from : `${from} – ${to}`;
     }
 
     _buildNotification() {
@@ -306,33 +417,61 @@ class Island extends St.Widget {
     }
 
     _buildCompact() {
-        this._compact = new St.Button({
+        this._compact = new St.Widget({
             style_class: 'island-compact',
-            button_mask: St.ButtonMask.ONE | St.ButtonMask.TWO,
+            layout_manager: new Clutter.BinLayout(),
             x_align: Clutter.ActorAlign.CENTER,
             y_align: Clutter.ActorAlign.START,
+        });
+        this._clip.add_child(this._compact);
+
+        this._compactBox = new St.BoxLayout({
+            style_class: 'island-compact-box',
+            x_expand: true,
+            y_expand: true,
+        });
+        this._compact.add_child(this._compactBox);
+        this._compactBox.connect('queue-relayout', () => {
+            if (!this._timeouts.has('measure'))
+                this._startTimeout('measure', 0, () => this._updateCompactWidth());
+        });
+
+        this._compactTime = new St.Label({
+            style_class: 'island-compact-time',
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+        this._wallClock = new GnomeDesktop.WallClock({time_only: true});
+        this._wallClock.connectObject('notify::clock', () => this._syncTime(), this);
+
+        this._timeButton = new St.Button({
+            style_class: 'island-compact-time-button',
+            child: this._compactTime,
+            y_align: Clutter.ActorAlign.CENTER,
+            visible: false,
+            can_focus: true,
+            accessible_name: _('Calendar'),
+        });
+        this._timeButton.connect('clicked', () => this.showCalendar());
+        this._compactBox.add_child(this._timeButton);
+        this._syncTime();
+
+        this._mediaButton = new St.Button({
+            style_class: 'island-compact-media',
+            button_mask: St.ButtonMask.ONE | St.ButtonMask.TWO,
+            x_expand: true,
+            y_expand: true,
             accessible_name: _('Now playing'),
         });
-        this._compact.connect('clicked', (_button, clickedButton) => {
+        this._mediaButton.connect('clicked', (_button, clickedButton) => {
             if (clickedButton === Clutter.BUTTON_MIDDLE)
                 this._player?.playPause();
             else
                 this.setExpanded(true);
         });
-        this._clip.add_child(this._compact);
+        this._compactBox.add_child(this._mediaButton);
 
-        const box = new St.BoxLayout({style_class: 'island-compact-box', x_expand: true});
-        this._compact.set_child(box);
-
-        this._compactTime = new St.Label({
-            style_class: 'island-compact-time',
-            y_align: Clutter.ActorAlign.CENTER,
-            visible: false,
-        });
-        this._wallClock = new GnomeDesktop.WallClock({time_only: true});
-        this._wallClock.connectObject('notify::clock', () => this._syncTime(), this);
-        this._syncTime();
-        box.add_child(this._compactTime);
+        const box = new St.BoxLayout({style_class: 'island-compact-media-box', x_expand: true});
+        this._mediaButton.set_child(box);
 
         this._compactArt = new Artwork('island-art-small');
         box.add_child(this._compactArt);
@@ -496,8 +635,10 @@ class Island extends St.Widget {
         const scale = St.ThemeContext.get_for_stage(global.stage).scale_factor;
         const topBar = this._settings.get_string('placement') === 'top-bar';
 
-        this._compactTime.visible = topBar;
-        this._compactWidth = (COMPACT_WIDTH + (topBar ? COMPACT_TIME_WIDTH : 0)) * scale;
+        this._timeButton.visible = topBar;
+        this._topBar = topBar;
+        this._scale = scale;
+        this._compactWidth = this._measureCompactWidth();
         this._compactHeight = topBar
             ? Math.max(24 * scale, Main.panel.height - 6 * scale)
             : COMPACT_HEIGHT * scale;
@@ -505,7 +646,6 @@ class Island extends St.Widget {
         this._notificationWidth = NOTIFICATION_WIDTH * scale;
         this._maxRadius = EXPANDED_RADIUS * scale;
         this._gap = PANEL_GAP * scale;
-        this._topBar = topBar;
 
         this._compact.set_size(this._compactWidth, this._compactHeight);
         this._expandedBox.width = this._expandedWidth;
@@ -516,6 +656,18 @@ class Island extends St.Widget {
     }
 
     _targetSize() {
+        const node = this.get_theme_node();
+        const border = node.get_border_width(St.Side.LEFT) + node.get_border_width(St.Side.RIGHT);
+        const [width, height] = this._contentSize();
+        return [width + border, height];
+    }
+
+    _contentSize() {
+        if (this._view === 'calendar') {
+            const [, width] = this._calendarBox.get_preferred_width(-1);
+            const [, height] = this._calendarBox.get_preferred_height(width);
+            return [width, height];
+        }
         if (this._view === 'notification') {
             const [, height] = this._notificationBox.get_preferred_height(this._notificationWidth);
             return [this._notificationWidth, height];
@@ -539,17 +691,43 @@ class Island extends St.Widget {
             return;
         }
 
-        const growing = this._view !== 'compact';
         this._resizing = true;
+        const done = () => {
+            this._resizing = false;
+        };
+        if (this._view !== 'compact') {
+            this._easeSettle({width, height}, EXPAND_DURATION, done);
+            return;
+        }
         this.ease({
             width,
             height,
-            duration: growing ? EXPAND_DURATION : COLLAPSE_DURATION,
-            mode: growing
-                ? Clutter.AnimationMode.EASE_OUT_BACK
-                : Clutter.AnimationMode.EASE_OUT_QUINT,
-            onStopped: () => {
-                this._resizing = false;
+            duration: COLLAPSE_DURATION,
+            mode: Clutter.AnimationMode.EASE_OUT_QUINT,
+            onStopped: done,
+        });
+    }
+
+    _easeSettle(target, duration, onDone) {
+        const overshoot = {};
+        for (const [key, value] of Object.entries(target))
+            overshoot[key] = value + (value - this[key]) * SETTLE_OVERSHOOT;
+
+        this.ease({
+            ...overshoot,
+            duration: Math.round(duration * 0.7),
+            mode: Clutter.AnimationMode.EASE_OUT_CUBIC,
+            onStopped: finished => {
+                if (!finished) {
+                    onDone?.();
+                    return;
+                }
+                this.ease({
+                    ...target,
+                    duration: Math.round(duration * 0.3),
+                    mode: Clutter.AnimationMode.EASE_IN_OUT_SINE,
+                    onStopped: () => onDone?.(),
+                });
             },
         });
     }
@@ -567,38 +745,32 @@ class Island extends St.Widget {
         this.set_position(x, y);
     }
 
-    _placeClock() {
-        const clock = Main.panel.statusArea.dateMenu?.container;
-        if (!clock)
-            return;
-
-        const leftBox = Main.panel._leftBox;
-        const wantLeft = this._settings.get_boolean('clock-left');
-        const parent = clock.get_parent();
-
-        if (wantLeft && parent !== leftBox) {
-            this._clockHome = {parent, index: parent?.get_children().indexOf(clock) ?? 0};
-            parent?.remove_child(clock);
-            leftBox.add_child(clock);
-        } else if (!wantLeft && parent === leftBox) {
-            this._restoreClock();
-        }
-        this._updateClock(false);
-    }
-
-    _restoreClock() {
-        const clock = Main.panel.statusArea.dateMenu?.container;
-        if (!clock || !this._clockHome || clock.get_parent() !== Main.panel._leftBox)
-            return;
-
-        const {parent, index} = this._clockHome;
-        this._clockHome = null;
-        clock.get_parent().remove_child(clock);
-        (parent ?? Main.panel._centerBox).insert_child_at_index(clock, index);
-    }
-
     _syncTime() {
-        this._compactTime.text = this._wallClock.clock.trim();
+        const date = GLib.DateTime.new_now_local().format('%b %-e');
+        this._compactTime.text = `${date}  ${this._wallClock.clock.trim()}`;
+
+        this._updateCompactWidth();
+    }
+
+    _measureCompactWidth() {
+        const scale = this._scale ?? 1;
+        const [, boxWidth] = this._compactBox.get_preferred_width(-1);
+        const [, titleWidth] = this._compactTitle.get_preferred_width(-1);
+        const title = Math.clamp(titleWidth, COMPACT_TITLE_MIN * scale, COMPACT_TITLE_MAX * scale);
+        const padding = this._compact.get_theme_node().get_horizontal_padding();
+        return Math.ceil(boxWidth - titleWidth + title + padding);
+    }
+
+    _updateCompactWidth() {
+        if (this._compactHeight === undefined)
+            return;
+        const width = this._measureCompactWidth();
+        if (Math.abs(width - this._compactWidth) < 1)
+            return;
+        this._compactWidth = width;
+        this._compact.width = width;
+        if (this._view === 'compact')
+            this._resize(true);
     }
 
     _updateClock(animate) {
@@ -650,6 +822,7 @@ class Island extends St.Widget {
             compact: this._compact,
             expanded: this._expandedBox,
             notification: this._notificationBox,
+            calendar: this._calendarBox,
         };
         const incoming = actors[view];
         const outgoing = actors[this._view];
@@ -674,21 +847,59 @@ class Island extends St.Widget {
     }
 
     setExpanded(expanded) {
+        this._setCard(expanded ? 'expanded' : null);
+    }
+
+    _setCard(card) {
         this._clearTimeout('expand');
         this._clearTimeout('collapse');
-        if (!this._shown || this._notification || this._expanded === expanded)
+        if (!this._shown || this._notification)
+            return;
+        const current = this._expanded ? this._view : null;
+        if (current === card)
             return;
 
-        this._expanded = expanded;
-        this._setView(expanded ? 'expanded' : 'compact');
+        this._expanded = card !== null;
+        if (card === 'calendar')
+            this._resetCalendar();
+        this._setView(card ?? 'compact');
         this._syncTimers();
-        if (expanded) {
-            this._grabHelper.grab({actor: this, onUngrab: () => this.setExpanded(false)});
-            this._refreshPosition();
-        } else {
-            this._grabHelper.ungrab({actor: this});
-            this._pullNotifications();
+
+        if (card) {
+            this._grabHelper.grab({actor: this, onUngrab: () => this._setCard(null)});
+            if (card === 'expanded')
+                this._refreshPosition();
+            return;
         }
+
+        this._grabHelper.ungrab({actor: this});
+        if (this._calendarRequested) {
+            this._calendarRequested = false;
+            this._updateVisibility();
+        }
+        this._pullNotifications();
+    }
+
+    showCalendar() {
+        if (this._notification)
+            this._endNotification();
+        this._calendarRequested = true;
+        this._updateVisibility();
+        if (!this._shown || this._suppressed) {
+            this._calendarRequested = false;
+            return;
+        }
+        this._setCard('calendar');
+    }
+
+    toggleCalendar() {
+        if (this._expanded && this._view === 'calendar') {
+            this._setCard(null);
+            return;
+        }
+        this.showCalendar();
+        if (this._view === 'calendar' && !this.hover)
+            this._startTimeout('collapse', CALENDAR_AUTO_COLLAPSE_DELAY, () => this._setCard(null));
     }
 
     get notificationBusy() {
@@ -851,7 +1062,10 @@ class Island extends St.Widget {
         if (this.hover) {
             this._clearTimeout('collapse');
             if (this._settings.get_boolean('expand-on-hover') && !this._expanded)
-                this._startTimeout('expand', HOVER_EXPAND_DELAY, () => this.setExpanded(true));
+                this._startTimeout('expand', HOVER_EXPAND_DELAY, () => {
+                    if (!this._timeButton.hover)
+                        this.setExpanded(true);
+                });
         } else {
             this._clearTimeout('expand');
             if (this._expanded && !this._dragging)
@@ -899,7 +1113,7 @@ class Island extends St.Widget {
         if (this._shown && !this._notification && hadMedia !== wanted && wanted)
             this._compact.set({visible: true, opacity: 255});
 
-        if (wanted || this._notification)
+        if (wanted || this._notification || this._calendarRequested)
             this._show();
         else
             this._hide();
@@ -934,9 +1148,11 @@ class Island extends St.Widget {
         this._compact.remove_all_transitions();
         this._expandedBox.remove_all_transitions();
         this._notificationBox.remove_all_transitions();
+        this._calendarBox.remove_all_transitions();
         this._compact.set({visible: true, opacity: this._mediaWanted ? 255 : 0});
         this._expandedBox.set({visible: false, opacity: 0});
         this._notificationBox.set({visible: false, opacity: 0});
+        this._calendarBox.set({visible: false, opacity: 0});
         this._resize(false);
         this._reposition();
 
@@ -948,11 +1164,10 @@ class Island extends St.Widget {
             this.set({scale_x: 0.5, scale_y: 0.5});
             this.ease({
                 opacity: 255,
-                scale_x: 1,
-                scale_y: 1,
-                duration: 360,
-                mode: Clutter.AnimationMode.EASE_OUT_BACK,
+                duration: 220,
+                mode: Clutter.AnimationMode.EASE_OUT_QUAD,
             });
+            this._easeSettle({scale_x: 1, scale_y: 1}, 380);
         }
         this._updateClock(true);
         this._syncTimers();
@@ -1007,6 +1222,7 @@ class Island extends St.Widget {
         const artists = player.artists.join(', ');
 
         this._compactTitle.text = player.title || player.name;
+        this._updateCompactWidth();
         this._titleLabel.text = title;
         this._artistLabel.text = artists || player.name;
         this._albumLabel.text = player.album;
@@ -1108,15 +1324,15 @@ class Island extends St.Widget {
 
     _pulse() {
         this.ease({
-            scale_x: 1.06,
-            scale_y: 1.06,
-            duration: 140,
+            scale_x: 1.03,
+            scale_y: 1.03,
+            duration: 160,
             mode: Clutter.AnimationMode.EASE_OUT_QUAD,
             onComplete: () => this.ease({
                 scale_x: 1,
                 scale_y: 1,
-                duration: 260,
-                mode: Clutter.AnimationMode.EASE_OUT_BACK,
+                duration: 280,
+                mode: Clutter.AnimationMode.EASE_IN_OUT_SINE,
             }),
         });
     }
@@ -1171,7 +1387,7 @@ class Island extends St.Widget {
         if (!playing)
             this._animateEq(false);
 
-        if (playing && this._expanded) {
+        if (playing && this._view === 'expanded') {
             if (!this._timeouts.has('progress'))
                 this._startInterval('progress', PROGRESS_INTERVAL, () => this._updateProgress());
             if (!this._timeouts.has('position'))
@@ -1223,7 +1439,8 @@ class Island extends St.Widget {
         const clock = Main.panel.statusArea.dateMenu?.container;
         clock?.remove_transition('opacity');
         clock?.set({opacity: 255, visible: true});
-        this._restoreClock();
+        this._eventSource.disconnectObject(this);
+        this._eventSource.destroy();
         this._wallClock.disconnectObject(this);
         this._wallClock.run_dispose();
         this._wallClock = null;

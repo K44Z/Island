@@ -45,6 +45,7 @@ export default class IslandExtension extends Extension {
             'seek-backward': () => this._island.seekBy(-1),
             'seek-forward': () => this._island.seekBy(1),
             'next-player': () => this._manager.selectNext(),
+            'toggle-calendar': () => this._island.toggleCalendar(),
         };
         for (const [name, handler] of Object.entries(this._keybindings)) {
             Main.wm.addKeybinding(name, this._settings,

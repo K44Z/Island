@@ -8,8 +8,9 @@ for media, the time and notifications.
   album art, title, artist and album, a seekable progress bar, previous /
   play-pause / next, ±N second seek, shuffle, repeat and a switcher when
   several players are running. Middle-click the pill to play/pause.
-- **Time:** placed inside the top bar, the pill shows the time in place of
-  GNOME's clock while it is visible.
+- **Date and time:** placed inside the top bar, the pill shows the date and
+  time in place of GNOME's clock while it is visible. Click them to open the
+  calendar: a month view with your events for the selected day.
 - **Notifications:** incoming notifications open the island into a card with
   the app, title, message and action buttons, then shrink back after a few
   seconds. Click the card to open it; urgent ones stay until dismissed.
@@ -65,5 +66,6 @@ gnome-extensions prefs island@k44z                   # settings window
 | Previous / next track | Super+Ctrl+, / Super+Ctrl+. |
 | Seek back / forward | Super+Ctrl+← / Super+Ctrl+→ |
 | Switch player | Super+Ctrl+P |
+| Calendar | Super+Ctrl+C |
 
 All of them can be changed in the settings window.

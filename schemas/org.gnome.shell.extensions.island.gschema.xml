@@ -16,10 +16,6 @@
       <summary>Where the island sits</summary>
       <description>below-top-bar floats just under the top bar; top-bar sits inside the top bar and shows the time in place of the clock while media is playing.</description>
     </key>
-    <key name="clock-left" type="b">
-      <default>false</default>
-      <summary>Move the date and time to the left side of the top bar</summary>
-    </key>
     <key name="show-notifications" type="b">
       <default>true</default>
       <summary>Show notifications in the island instead of GNOME's banners</summary>
@@ -56,6 +52,10 @@
     <key name="seek-forward" type="as">
       <default><![CDATA[['<Super><Control>Right']]]></default>
       <summary>Seek forward</summary>
+    </key>
+    <key name="toggle-calendar" type="as">
+      <default><![CDATA[['<Super><Control>c']]]></default>
+      <summary>Open or close the calendar</summary>
     </key>
     <key name="next-player" type="as">
       <default><![CDATA[['<Super><Control>p']]]></default>
