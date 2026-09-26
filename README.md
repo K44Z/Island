@@ -1,12 +1,20 @@
 # Island
 
-A Dynamic Island style media controller for GNOME Shell 50.
+A Dynamic Island for GNOME Shell 50: one black pill at the top of the screen
+for media, the time and notifications.
 
-A black pill sits at the top center of the screen while something plays. Hover
-it (or click it) and it grows into a full player: album art, title, artist and
-album, a seekable progress bar, previous / play-pause / next, ±N second seek,
-shuffle, repeat and a switcher when several players are running.
-Middle-click the pill to play/pause. It hides when nothing is playing.
+- **Media:** while something plays, the pill shows the cover, title and a
+  little equalizer. Hover it (or click it) and it grows into a full player:
+  album art, title, artist and album, a seekable progress bar, previous /
+  play-pause / next, ±N second seek, shuffle, repeat and a switcher when
+  several players are running. Middle-click the pill to play/pause.
+- **Time:** placed inside the top bar, the pill shows the time in place of
+  GNOME's clock while it is visible.
+- **Notifications:** incoming notifications open the island into a card with
+  the app, title, message and action buttons, then shrink back after a few
+  seconds. Click the card to open it; urgent ones stay until dismissed.
+
+It hides when there is nothing to show.
 
 ![Island demo](assets/demo.gif)
 

@@ -2,6 +2,7 @@ import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
+import GnomeDesktop from 'gi://GnomeDesktop';
 import Graphene from 'gi://Graphene';
 import Pango from 'gi://Pango';
 import Shell from 'gi://Shell';
@@ -9,6 +10,7 @@ import St from 'gi://St';
 
 import * as GrabHelper from 'resource:///org/gnome/shell/ui/grabHelper.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+import * as MessageTray from 'resource:///org/gnome/shell/ui/messageTray.js';
 import * as Slider from 'resource:///org/gnome/shell/ui/slider.js';
 import {gettext as _} from 'resource:///org/gnome/shell/extensions/extension.js';
 
@@ -16,6 +18,7 @@ import {ArtCache} from './art.js';
 import {byName} from './mpris.js';
 
 const COMPACT_WIDTH = 236;
+const COMPACT_TIME_WIDTH = 64;
 const COMPACT_HEIGHT = 34;
 const EXPANDED_WIDTH = 400;
 const EXPANDED_RADIUS = 28;
@@ -32,9 +35,16 @@ const PAUSED_HIDE_DELAY = 8000;
 
 const GONE_HIDE_DELAY = 1500;
 
+const NOTIFICATION_WIDTH = 380;
+const NOTIFICATION_DURATION = 5000;
+const NOTIFICATION_LINGER = 2000;
+const NOTIFICATION_BODY_MAX = 140;
+const NOTIFICATION_MAX_ACTIONS = 3;
+
 const EQ_BARS = 4;
 const EQ_INTERVAL = 170;
-const POSITION_INTERVAL = 1000;
+const PROGRESS_INTERVAL = 500;
+const POSITION_INTERVAL = 2000;
 
 function formatTime(us) {
     const total = Math.max(0, Math.floor(us / 1e6));
@@ -42,6 +52,23 @@ function formatTime(us) {
     const m = Math.floor(total / 60) % 60;
     const s = String(total % 60).padStart(2, '0');
     return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${s}` : `${m}:${s}`;
+}
+
+function plainText(text, markup) {
+    if (!text)
+        return '';
+    if (markup) {
+        text = text.replace(/<[^>]*>/g, '')
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/&quot;/g, '"')
+            .replace(/&apos;/g, "'")
+            .replace(/&amp;/g, '&');
+    }
+    text = text.replace(/\s+/g, ' ').trim();
+    return text.length > NOTIFICATION_BODY_MAX
+        ? `${text.slice(0, NOTIFICATION_BODY_MAX - 1).trimEnd()}…`
+        : text;
 }
 
 function makeButton(iconName, styleClass, accessibleName) {
@@ -127,12 +154,14 @@ class Island extends St.Widget {
 
         this._shown = false;
         this._suppressed = false;
+        this._view = 'compact';
         this._expanded = false;
+        this._mediaWanted = false;
+        this._notification = null;
         this._dragging = false;
         this._pausedLongEnough = false;
         this._player = null;
         this._trackKey = null;
-        this._position = 0;
         this._artToken = 0;
         this._timeouts = new Map();
         this._playerChips = [];
@@ -141,7 +170,6 @@ class Island extends St.Widget {
 
         this.connect('notify::hover', () => this._onHoverChanged());
         this.connect('notify::width', () => this._reposition());
-        this.connect('notify::x', () => this._updateClock(false));
         this.connect('notify::height', () => this._updateRadius());
         this.connect('destroy', () => this._onDestroy());
 
@@ -152,14 +180,15 @@ class Island extends St.Widget {
             'changed::placement', () => this._updateGeometry(),
             'changed::clock-left', () => this._placeClock(),
             'changed::seek-step', () => this._syncSeekLabels(),
-            'changed::hide-when-paused', () => this._updateVisibility(), this);
+            'changed::hide-when-paused', () => this._updateVisibility(),
+            'changed::show-notifications', () => {
+                if (!this._settings.get_boolean('show-notifications'))
+                    this._endNotification();
+            }, this);
         Main.layoutManager.connectObject('monitors-changed',
             () => this._updateGeometry(), this);
         Main.panel.connectObject('notify::height',
             () => this._updateGeometry(), this);
-
-        Main.panel.statusArea.dateMenu?.container.connectObject('notify::width',
-            () => this._updateClock(false), this);
 
         Main.sessionMode.connectObject('updated', () => this._placeClock(), this);
         St.ThemeContext.get_for_stage(global.stage).connectObject('notify::scale-factor',
@@ -190,6 +219,90 @@ class Island extends St.Widget {
 
         this._buildCompact();
         this._buildExpanded();
+        this._buildNotification();
+    }
+
+    _buildNotification() {
+        this._notificationBox = new St.BoxLayout({
+            style_class: 'island-notification',
+            orientation: Clutter.Orientation.VERTICAL,
+            x_align: Clutter.ActorAlign.CENTER,
+            y_align: Clutter.ActorAlign.START,
+            opacity: 0,
+            visible: false,
+        });
+        this._clip.add_child(this._notificationBox);
+
+        const header = new St.BoxLayout({style_class: 'island-notification-header'});
+        this._notificationBox.add_child(header);
+
+        this._senderIcon = new St.Icon({
+            style_class: 'island-notification-sender-icon',
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+        header.add_child(this._senderIcon);
+
+        this._senderName = new St.Label({
+            style_class: 'island-notification-sender',
+            x_expand: true,
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+        this._senderName.clutter_text.ellipsize = Pango.EllipsizeMode.END;
+        header.add_child(this._senderName);
+
+        const close = makeButton('window-close-symbolic', 'island-notification-close', _('Dismiss'));
+        close.connect('clicked', () => this._endNotification());
+        header.add_child(close);
+
+        const row = new St.BoxLayout({
+            style_class: 'island-notification-row',
+            x_expand: true,
+            x_align: Clutter.ActorAlign.FILL,
+        });
+        const main = new St.Button({
+            style_class: 'island-notification-main',
+            child: row,
+            x_expand: true,
+            x_align: Clutter.ActorAlign.FILL,
+            can_focus: true,
+        });
+        main.connect('clicked', () => this._activateNotification());
+        this._notificationBox.add_child(main);
+
+        this._notificationImage = new St.Icon({
+            style_class: 'island-notification-image',
+            y_align: Clutter.ActorAlign.START,
+        });
+        row.add_child(this._notificationImage);
+
+        const text = new St.BoxLayout({
+            style_class: 'island-notification-text',
+            orientation: Clutter.Orientation.VERTICAL,
+            x_expand: true,
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+        row.add_child(text);
+
+        this._notificationTitle = new St.Label({
+            style_class: 'island-notification-title',
+            x_align: Clutter.ActorAlign.START,
+        });
+        this._notificationTitle.clutter_text.ellipsize = Pango.EllipsizeMode.END;
+        text.add_child(this._notificationTitle);
+
+        this._notificationBody = new St.Label({
+            style_class: 'island-notification-body',
+            x_align: Clutter.ActorAlign.START,
+        });
+        this._notificationBody.clutter_text.set({
+            line_wrap: true,
+            line_wrap_mode: Pango.WrapMode.WORD_CHAR,
+            ellipsize: Pango.EllipsizeMode.NONE,
+        });
+        text.add_child(this._notificationBody);
+
+        this._notificationActions = new St.BoxLayout({style_class: 'island-notification-actions'});
+        this._notificationBox.add_child(this._notificationActions);
     }
 
     _buildCompact() {
@@ -210,6 +323,16 @@ class Island extends St.Widget {
 
         const box = new St.BoxLayout({style_class: 'island-compact-box', x_expand: true});
         this._compact.set_child(box);
+
+        this._compactTime = new St.Label({
+            style_class: 'island-compact-time',
+            y_align: Clutter.ActorAlign.CENTER,
+            visible: false,
+        });
+        this._wallClock = new GnomeDesktop.WallClock({time_only: true});
+        this._wallClock.connectObject('notify::clock', () => this._syncTime(), this);
+        this._syncTime();
+        box.add_child(this._compactTime);
 
         this._compactArt = new Artwork('island-art-small');
         box.add_child(this._compactArt);
@@ -306,11 +429,9 @@ class Island extends St.Widget {
             this._dragging = false;
             this._seekingByDrag = false;
             const player = this._player;
-            if (player?.length > 0) {
-                const target = this._progress.value * player.length;
-                player.setPosition(target, this._position);
-                this._setPosition(target);
-            }
+            if (player?.length > 0)
+                player.setPosition(this._progress.value * player.length);
+            this._updateProgress();
             this._onHoverChanged();
         });
         this._progress.connect('notify::value', () => {
@@ -375,27 +496,35 @@ class Island extends St.Widget {
         const scale = St.ThemeContext.get_for_stage(global.stage).scale_factor;
         const topBar = this._settings.get_string('placement') === 'top-bar';
 
-        this._compactWidth = COMPACT_WIDTH * scale;
+        this._compactTime.visible = topBar;
+        this._compactWidth = (COMPACT_WIDTH + (topBar ? COMPACT_TIME_WIDTH : 0)) * scale;
         this._compactHeight = topBar
             ? Math.max(24 * scale, Main.panel.height - 6 * scale)
             : COMPACT_HEIGHT * scale;
         this._expandedWidth = EXPANDED_WIDTH * scale;
+        this._notificationWidth = NOTIFICATION_WIDTH * scale;
         this._maxRadius = EXPANDED_RADIUS * scale;
         this._gap = PANEL_GAP * scale;
         this._topBar = topBar;
 
         this._compact.set_size(this._compactWidth, this._compactHeight);
         this._expandedBox.width = this._expandedWidth;
+        this._notificationBox.width = this._notificationWidth;
         this._resize(false);
         this._reposition();
         this._updateClock(true);
     }
 
     _targetSize() {
-        if (!this._expanded)
-            return [this._compactWidth, this._compactHeight];
-        const [, height] = this._expandedBox.get_preferred_height(this._expandedWidth);
-        return [this._expandedWidth, height];
+        if (this._view === 'notification') {
+            const [, height] = this._notificationBox.get_preferred_height(this._notificationWidth);
+            return [this._notificationWidth, height];
+        }
+        if (this._view === 'expanded') {
+            const [, height] = this._expandedBox.get_preferred_height(this._expandedWidth);
+            return [this._expandedWidth, height];
+        }
+        return [this._compactWidth, this._compactHeight];
     }
 
     _resize(animate) {
@@ -410,12 +539,13 @@ class Island extends St.Widget {
             return;
         }
 
+        const growing = this._view !== 'compact';
         this._resizing = true;
         this.ease({
             width,
             height,
-            duration: this._expanded ? EXPAND_DURATION : COLLAPSE_DURATION,
-            mode: this._expanded
+            duration: growing ? EXPAND_DURATION : COLLAPSE_DURATION,
+            mode: growing
                 ? Clutter.AnimationMode.EASE_OUT_BACK
                 : Clutter.AnimationMode.EASE_OUT_QUINT,
             onStopped: () => {
@@ -467,30 +597,39 @@ class Island extends St.Widget {
         (parent ?? Main.panel._centerBox).insert_child_at_index(clock, index);
     }
 
+    _syncTime() {
+        this._compactTime.text = this._wallClock.clock.trim();
+    }
+
     _updateClock(animate) {
         const clock = Main.panel.statusArea.dateMenu?.container;
         if (!clock)
             return;
 
-        let offset = 0;
-        if (this._topBar && this._shown && clock.get_parent() !== Main.panel._leftBox) {
-            const [x] = clock.get_transformed_position();
-            const right = x - clock.translation_x + clock.width;
-            offset = Math.min(0, this.x - this._gap - right);
-        }
-
-        if (!Number.isFinite(offset))
-            return;
-
-        if (animate) {
-            clock.ease({
-                translation_x: offset,
-                duration: 300,
-                mode: Clutter.AnimationMode.EASE_OUT_QUAD,
-            });
+        const replaced = this._topBar && this._shown && !this._suppressed;
+        clock.remove_transition('opacity');
+        if (replaced) {
+            if (animate && clock.visible) {
+                clock.ease({
+                    opacity: 0,
+                    duration: 200,
+                    mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+                    onComplete: () => clock.hide(),
+                });
+            } else {
+                clock.set({opacity: 0, visible: false});
+            }
         } else {
-            clock.remove_transition('translation-x');
-            clock.translation_x = offset;
+            clock.show();
+            if (animate) {
+                clock.ease({
+                    opacity: 255,
+                    duration: 200,
+                    mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+                });
+            } else {
+                clock.opacity = 255;
+            }
         }
     }
 
@@ -503,22 +642,25 @@ class Island extends St.Widget {
         return this._expanded;
     }
 
-    setExpanded(expanded) {
-        this._clearTimeout('expand');
-        this._clearTimeout('collapse');
-        if (!this._shown || this._expanded === expanded)
+    _setView(view) {
+        if (this._view === view)
             return;
 
-        this._expanded = expanded;
-        const [incoming, outgoing] = expanded
-            ? [this._expandedBox, this._compact]
-            : [this._compact, this._expandedBox];
+        const actors = {
+            compact: this._compact,
+            expanded: this._expandedBox,
+            notification: this._notificationBox,
+        };
+        const incoming = actors[view];
+        const outgoing = actors[this._view];
+        const growing = view !== 'compact';
+        this._view = view;
 
         incoming.show();
         incoming.ease({
             opacity: 255,
-            duration: expanded ? 260 : 200,
-            delay: expanded ? 60 : 80,
+            duration: growing ? 260 : 200,
+            delay: growing ? 60 : 80,
             mode: Clutter.AnimationMode.EASE_OUT_QUAD,
         });
         outgoing.ease({
@@ -529,12 +671,152 @@ class Island extends St.Widget {
         });
 
         this._resize(true);
+    }
+
+    setExpanded(expanded) {
+        this._clearTimeout('expand');
+        this._clearTimeout('collapse');
+        if (!this._shown || this._notification || this._expanded === expanded)
+            return;
+
+        this._expanded = expanded;
+        this._setView(expanded ? 'expanded' : 'compact');
         this._syncTimers();
         if (expanded) {
             this._grabHelper.grab({actor: this, onUngrab: () => this.setExpanded(false)});
             this._refreshPosition();
         } else {
             this._grabHelper.ungrab({actor: this});
+            this._pullNotifications();
+        }
+    }
+
+    get notificationBusy() {
+        return !!this._notification || this._expanded;
+    }
+
+    get currentNotification() {
+        return this._notification;
+    }
+
+    canShowNotifications() {
+        return this._settings.get_boolean('show-notifications') &&
+            !this._suppressed && !!Main.layoutManager.primaryMonitor;
+    }
+
+    displayNotification(notification) {
+        const update = notification === this._notification;
+        if (!update) {
+            this._notification?.disconnectObject(this);
+            this._notification = notification;
+            notification.connectObject(
+                'destroy', () => {
+                    if (this._notification === notification)
+                        this._endNotification();
+                },
+                'notify::title', () => this._fillNotification(),
+                'notify::body', () => this._fillNotification(),
+                'notify::gicon', () => this._fillNotification(), this);
+        }
+
+        notification.acknowledged = true;
+        notification.playSound();
+        this._fillNotification();
+
+        this._updateVisibility();
+        this._setView('notification');
+        this._syncTimers();
+        if (update)
+            this._pulse();
+        this._scheduleNotificationEnd(NOTIFICATION_DURATION);
+    }
+
+    _fillNotification() {
+        const notification = this._notification;
+        if (!notification)
+            return;
+
+        const source = notification.source;
+        const appIcon = source?.icon ?? null;
+        this._senderIcon.gicon = appIcon ??
+            new Gio.ThemedIcon({name: 'preferences-system-notifications-symbolic'});
+        this._senderName.text = source?.title ?? '';
+
+        const image = notification.gicon;
+        const hasImage = !!image && !(appIcon && image.equal(appIcon));
+        this._notificationImage.gicon = hasImage ? image : null;
+        this._notificationImage.visible = hasImage;
+
+        this._notificationTitle.text = plainText(notification.title, false);
+
+        const body = plainText(notification.body, notification.useBodyMarkup);
+        this._notificationBody.text = body;
+        this._notificationBody.visible = !!body;
+
+        this._notificationActions.destroy_all_children();
+        const actions = notification.actions.slice(0, NOTIFICATION_MAX_ACTIONS);
+        for (const action of actions) {
+            const button = new St.Button({
+                style_class: 'island-notification-action',
+                label: action.label,
+                x_expand: true,
+                can_focus: true,
+            });
+            button.connect('clicked', () => {
+                action.activate();
+                this._endNotification();
+            });
+            this._notificationActions.add_child(button);
+        }
+        this._notificationActions.visible = actions.length > 0;
+
+        if (this._view === 'notification')
+            this._resize(true);
+    }
+
+    _scheduleNotificationEnd(delay) {
+        this._clearTimeout('notification');
+        const notification = this._notification;
+        if (!notification || this.hover ||
+            notification.urgency === MessageTray.Urgency.CRITICAL)
+            return;
+        this._startTimeout('notification', delay, () => this._endNotification());
+    }
+
+    _activateNotification() {
+        const notification = this._notification;
+        if (!notification)
+            return;
+        this._endNotification();
+        notification.activate();
+    }
+
+    _endNotification() {
+        const notification = this._notification;
+        if (!notification)
+            return;
+
+        notification.disconnectObject(this);
+        this._notification = null;
+        this._clearTimeout('notification');
+
+        this._pullNotifications();
+        if (this._notification)
+            return;
+
+        if (this._mediaWanted && this._shown)
+            this._setView('compact');
+        this._updateVisibility();
+        this._syncTimers();
+    }
+
+    _pullNotifications() {
+        if (this.notificationBusy || !this.canShowNotifications())
+            return;
+        try {
+            Main.messageTray._updateState();
+        } catch (e) {
+            console.debug(`Island: could not pull notifications: ${e.message}`);
         }
     }
 
@@ -545,6 +827,10 @@ class Island extends St.Widget {
     }
 
     toggle() {
+        if (this._notification) {
+            this._endNotification();
+            return;
+        }
         if (!this._shown)
             return;
         this.setExpanded(!this._expanded);
@@ -553,6 +839,15 @@ class Island extends St.Widget {
     }
 
     _onHoverChanged() {
+        if (this._notification) {
+            if (this.hover)
+                this._clearTimeout('notification');
+            else
+                this._scheduleNotificationEnd(NOTIFICATION_LINGER);
+            this._updateVisibility();
+            return;
+        }
+
         if (this.hover) {
             this._clearTimeout('collapse');
             if (this._settings.get_boolean('expand-on-hover') && !this._expanded)
@@ -574,13 +869,13 @@ class Island extends St.Widget {
         if (this._player) {
             this._clearTimeout('gone');
             this._goneLongEnough = false;
-        } else if (this._shown && !this._goneLongEnough && !this._timeouts.has('gone')) {
+        } else if (this._mediaWanted && !this._goneLongEnough && !this._timeouts.has('gone')) {
             this._startTimeout('gone', GONE_HIDE_DELAY, () => {
                 this._goneLongEnough = true;
                 this._updateVisibility();
             });
         }
-        const hasPlayer = !!this._player || (this._shown && !this._goneLongEnough);
+        const hasPlayer = !!this._player || (this._mediaWanted && !this._goneLongEnough);
 
         let wanted = hasPlayer;
 
@@ -599,7 +894,12 @@ class Island extends St.Widget {
             this._pausedLongEnough = false;
         }
 
-        if (wanted)
+        const hadMedia = this._mediaWanted;
+        this._mediaWanted = wanted;
+        if (this._shown && !this._notification && hadMedia !== wanted && wanted)
+            this._compact.set({visible: true, opacity: 255});
+
+        if (wanted || this._notification)
             this._show();
         else
             this._hide();
@@ -619,6 +919,9 @@ class Island extends St.Widget {
             this._resize(false);
             this._reposition();
         }
+        this._updateClock(false);
+        if (!suppressed)
+            this._pullNotifications();
     }
 
     _show() {
@@ -627,8 +930,13 @@ class Island extends St.Widget {
         this._shown = true;
 
         this._expanded = false;
-        this._compact.set({visible: true, opacity: 255});
+        this._view = 'compact';
+        this._compact.remove_all_transitions();
+        this._expandedBox.remove_all_transitions();
+        this._notificationBox.remove_all_transitions();
+        this._compact.set({visible: true, opacity: this._mediaWanted ? 255 : 0});
         this._expandedBox.set({visible: false, opacity: 0});
+        this._notificationBox.set({visible: false, opacity: 0});
         this._resize(false);
         this._reposition();
 
@@ -673,8 +981,7 @@ class Island extends St.Widget {
     _onCurrentChanged() {
         this._player?.disconnectObject(this);
         this._player = this._manager.current;
-        this._player?.connectObject('seeked',
-            (_player, position) => this._setPosition(position), this);
+        this._player?.connectObject('seeked', () => this._updateProgress(), this);
         this._trackKey = null;
         this._sync();
         this._refreshPosition();
@@ -750,7 +1057,7 @@ class Island extends St.Widget {
             : 'media-playlist-repeat-symbolic';
 
         this._progress.reactive = player.canSeek && player.length > 0;
-        this._setPosition(this._position);
+        this._updateProgress();
     }
 
     _syncSwitcher() {
@@ -820,10 +1127,7 @@ class Island extends St.Widget {
             return;
         const offset = direction * this._settings.get_int('seek-step') * 1e6;
         player.seek(offset);
-        const target = this._position + offset;
-        this._setPosition(player.length > 0
-            ? Math.clamp(target, 0, player.length)
-            : Math.max(0, target));
+        this._updateProgress();
     }
 
     async _refreshPosition() {
@@ -831,20 +1135,20 @@ class Island extends St.Widget {
         if (!player || !this._expanded)
             return;
         try {
-            const position = await player.getPosition();
-            if (player === this._player)
-                this._setPosition(position);
+            await player.refreshPosition();
         } catch {
-
+            return;
         }
+        if (player === this._player)
+            this._updateProgress();
     }
 
-    _setPosition(position) {
-        this._position = position;
-        if (this._seekingByDrag)
+    _updateProgress() {
+        const player = this._player;
+        if (!player || this._seekingByDrag)
             return;
-        const length = this._player?.length ?? 0;
-        this._progress.value = length > 0 ? Math.clamp(position / length, 0, 1) : 0;
+        const position = player.position;
+        this._progress.value = player.length > 0 ? Math.clamp(position / player.length, 0, 1) : 0;
         this._updateTimeLabels(position);
     }
 
@@ -857,7 +1161,7 @@ class Island extends St.Widget {
     _syncTimers() {
         const playing = this._shown && !!this._player?.isPlaying;
 
-        if (playing && !this._expanded) {
+        if (playing && this._view === 'compact') {
             if (!this._timeouts.has('eq'))
                 this._startInterval('eq', EQ_INTERVAL, () => this._animateEq(true));
         } else if (this._timeouts.has('eq')) {
@@ -868,9 +1172,12 @@ class Island extends St.Widget {
             this._animateEq(false);
 
         if (playing && this._expanded) {
+            if (!this._timeouts.has('progress'))
+                this._startInterval('progress', PROGRESS_INTERVAL, () => this._updateProgress());
             if (!this._timeouts.has('position'))
                 this._startInterval('position', POSITION_INTERVAL, () => this._refreshPosition());
         } else {
+            this._clearTimeout('progress');
             this._clearTimeout('position');
         }
     }
@@ -911,11 +1218,15 @@ class Island extends St.Widget {
 
     _onDestroy() {
         this._grabHelper.ungrab({actor: this});
+        this._notification?.disconnectObject(this);
+        this._notification = null;
         const clock = Main.panel.statusArea.dateMenu?.container;
-        clock?.remove_transition('translation-x');
-        if (clock)
-            clock.translation_x = 0;
+        clock?.remove_transition('opacity');
+        clock?.set({opacity: 255, visible: true});
         this._restoreClock();
+        this._wallClock.disconnectObject(this);
+        this._wallClock.run_dispose();
+        this._wallClock = null;
         for (const id of this._timeouts.values())
             GLib.source_remove(id);
         this._timeouts.clear();

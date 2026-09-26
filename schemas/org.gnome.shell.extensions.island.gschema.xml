@@ -14,11 +14,15 @@
     <key name="placement" enum="org.gnome.shell.extensions.island.placement">
       <default>'below-top-bar'</default>
       <summary>Where the island sits</summary>
-      <description>below-top-bar floats just under the top bar; top-bar sits inside the top bar and slides the clock aside while media is playing.</description>
+      <description>below-top-bar floats just under the top bar; top-bar sits inside the top bar and shows the time in place of the clock while media is playing.</description>
     </key>
     <key name="clock-left" type="b">
       <default>false</default>
       <summary>Move the date and time to the left side of the top bar</summary>
+    </key>
+    <key name="show-notifications" type="b">
+      <default>true</default>
+      <summary>Show notifications in the island instead of GNOME's banners</summary>
     </key>
     <key name="expand-on-hover" type="b">
       <default>true</default>

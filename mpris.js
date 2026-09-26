@@ -69,6 +69,9 @@ const PlayerProxy = Gio.DBusProxy.makeProxyWrapper(PlayerIface);
 
 const LOOP_CYCLE = {None: 'Playlist', Playlist: 'Track', Track: 'None'};
 
+const POSITION_HOLD = 1500000;
+const POSITION_TOLERANCE = 2000000;
+
 function asString(value) {
     return typeof value === 'string' ? value : '';
 }
@@ -127,6 +130,12 @@ export const MprisPlayer = GObject.registerClass({
         this._cancellable = new Gio.Cancellable();
         this._mprisProxy = null;
         this._playerProxy = null;
+
+        this._wasPlaying = false;
+        this._rate = 1;
+        this._positionBase = 0;
+        this._positionTime = GLib.get_monotonic_time();
+        this._positionHoldUntil = 0;
     }
 
     async init() {
@@ -141,7 +150,10 @@ export const MprisPlayer = GObject.registerClass({
         this._playerProxy.connectObject('g-properties-changed',
             () => this._updateState(), this);
         this._seekedId = this._playerProxy.connectSignal('Seeked',
-            (_proxy, _sender, [position]) => this.emit('seeked', asNumber(position)));
+            (_proxy, _sender, [position]) => {
+                this._setPosition(asNumber(position), true);
+                this.emit('seeked', this.position);
+            });
 
         this._updateIdentity();
         this._updateState();
@@ -193,8 +205,13 @@ export const MprisPlayer = GObject.registerClass({
         return !!this._playerProxy?.CanSeek;
     }
 
-    get rate() {
-        return this._playerProxy?.Rate || 1;
+    get position() {
+        let position = this._positionBase;
+        if (this._wasPlaying)
+            position += (GLib.get_monotonic_time() - this._positionTime) * this._rate;
+        return this.length > 0
+            ? Math.clamp(position, 0, this.length)
+            : Math.max(0, position);
     }
 
     get shuffle() {
@@ -220,17 +237,21 @@ export const MprisPlayer = GObject.registerClass({
     }
 
     seek(offset) {
-        if (this.canSeek)
-            this._call('SeekAsync', Math.round(offset));
-    }
-
-    setPosition(position, currentPosition) {
         if (!this.canSeek)
             return;
+        this._setPosition(this.position + offset, true);
+        this._call('SeekAsync', Math.round(offset));
+    }
+
+    setPosition(position) {
+        if (!this.canSeek)
+            return;
+        const current = this.position;
+        this._setPosition(position, true);
         if (this.trackId && GLib.Variant.is_object_path(this.trackId))
             this._call('SetPositionAsync', this.trackId, Math.round(position));
         else
-            this.seek(position - currentPosition);
+            this._call('SeekAsync', Math.round(position - current));
     }
 
     toggleShuffle() {
@@ -249,14 +270,33 @@ export const MprisPlayer = GObject.registerClass({
         this.app?.activate();
     }
 
-    async getPosition() {
+    async refreshPosition() {
         const [value] = (await Gio.DBus.session.call(
             this.busName, MPRIS_PATH,
             'org.freedesktop.DBus.Properties', 'Get',
             new GLib.Variant('(ss)', [PLAYER_IFACE, 'Position']),
             new GLib.VariantType('(v)'),
             Gio.DBusCallFlags.NONE, 1000, this._cancellable)).deepUnpack();
-        return asNumber(value.unpack());
+        const reported = asNumber(value.unpack());
+
+        if (GLib.get_monotonic_time() < this._positionHoldUntil)
+            return;
+
+        const estimate = this.position;
+        const nearEnd = this.length > 0 && estimate > this.length - POSITION_TOLERANCE;
+        if (reported === 0 && estimate > POSITION_TOLERANCE && !nearEnd)
+            return;
+
+        this._setPosition(reported);
+    }
+
+    _setPosition(position, hold = false) {
+        this._positionBase = this.length > 0
+            ? Math.clamp(position, 0, this.length)
+            : Math.max(0, position);
+        this._positionTime = GLib.get_monotonic_time();
+        if (hold)
+            this._positionHoldUntil = this._positionTime + POSITION_HOLD;
     }
 
     _call(method, ...args) {
@@ -278,13 +318,18 @@ export const MprisPlayer = GObject.registerClass({
         for (const key in raw)
             metadata[key] = raw[key] instanceof GLib.Variant ? raw[key].deepUnpack() : raw[key];
 
-        if (Object.keys(metadata).length > 0 || this.status === 'Stopped')
-            this._applyMetadata(metadata);
-
         const playing = this.isPlaying;
+        const rate = typeof this._playerProxy.Rate === 'number' ? this._playerProxy.Rate : 1;
+        if (playing !== this._wasPlaying || rate !== this._rate) {
+            this._setPosition(this.position);
+            this._rate = rate;
+        }
         if (playing && !this._wasPlaying)
             this.lastActive = GLib.get_monotonic_time();
         this._wasPlaying = playing;
+
+        if (Object.keys(metadata).length > 0 || this.status === 'Stopped')
+            this._applyMetadata(metadata);
 
         this.emit('changed');
     }
@@ -301,6 +346,8 @@ export const MprisPlayer = GObject.registerClass({
         this.album = asString(metadata['xesam:album']);
         this.artUrl = asString(metadata['mpris:artUrl']);
         this.length = length > 0 || !sameTrack ? length : this.length;
+        if (!sameTrack)
+            this._setPosition(0);
     }
 });
 

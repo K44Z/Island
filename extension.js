@@ -1,7 +1,7 @@
 import Meta from 'gi://Meta';
 import Shell from 'gi://Shell';
 
-import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
+import {Extension, InjectionManager} from 'resource:///org/gnome/shell/extensions/extension.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
 import {PlayerManager} from './mpris.js';
@@ -18,6 +18,23 @@ export default class IslandExtension extends Extension {
         });
         Main.layoutManager.addChrome(this._island);
         this._island.start();
+
+        const island = this._island;
+        this._injectionManager = new InjectionManager();
+        this._injectionManager.overrideMethod(Main.messageTray, '_showNotification',
+            original => function () {
+                if (!island.canShowNotifications())
+                    return original.call(this);
+
+                const notification = this._notificationQueue[0];
+                if (island.notificationBusy && notification !== island.currentNotification)
+                    return undefined;
+
+                this._notificationQueue.shift();
+                this.emit('queue-changed');
+                island.displayNotification(notification);
+                return undefined;
+            });
 
         const current = () => this._manager.current;
         this._keybindings = {
@@ -39,6 +56,9 @@ export default class IslandExtension extends Extension {
     }
 
     disable() {
+        this._injectionManager.clear();
+        this._injectionManager = null;
+
         for (const name of Object.keys(this._keybindings))
             Main.wm.removeKeybinding(name);
         this._keybindings = null;

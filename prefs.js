@@ -106,7 +106,7 @@ export default class IslandPreferences extends ExtensionPreferences {
 
         const placement = new Adw.ComboRow({
             title: _('Placement'),
-            subtitle: _('Inside the top bar moves the clock aside while media plays'),
+            subtitle: _('Inside the top bar, the island shows the time in place of the clock while media plays'),
             model: Gtk.StringList.new([_('Below the top bar'), _('Inside the top bar')]),
         });
         placement.selected = Math.max(0, PLACEMENTS.indexOf(settings.get_string('placement')));
@@ -120,6 +120,13 @@ export default class IslandPreferences extends ExtensionPreferences {
         });
         settings.bind('clock-left', clockLeft, 'active', Gio.SettingsBindFlags.DEFAULT);
         behavior.add(clockLeft);
+
+        const notifications = new Adw.SwitchRow({
+            title: _('Notifications in the island'),
+            subtitle: _('Show notifications in the island instead of GNOME’s banners'),
+        });
+        settings.bind('show-notifications', notifications, 'active', Gio.SettingsBindFlags.DEFAULT);
+        behavior.add(notifications);
 
         const hover = new Adw.SwitchRow({
             title: _('Expand on hover'),

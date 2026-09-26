@@ -11,6 +11,8 @@ const glitchy = flags.has('--glitchy');
 const flakyLength = flags.has('--flaky-length');
 const noLength = flags.has('--no-length');
 let dropLength = noLength;
+const zeroAfterSeek = flags.has('--zero-after-seek');
+let reportZero = false;
 let blank = false;
 
 const LENGTH = 243 * 1e6;
@@ -162,7 +164,7 @@ const player = {
         return metadata();
     },
     get Position() {
-        return position();
+        return reportZero ? 0 : position();
     },
     CanGoNext: true,
     CanGoPrevious: true,
@@ -176,6 +178,7 @@ const rootObj = Gio.DBusExportedObject.wrapJSObject(RootIface, root);
 const playerObj = Gio.DBusExportedObject.wrapJSObject(PlayerIface, player);
 
 function afterSeek() {
+    reportZero = zeroAfterSeek;
     if (!flakyLength)
         return;
     dropLength = true;
@@ -184,6 +187,7 @@ function afterSeek() {
 
 function trackChanged() {
     dropLength = noLength;
+    reportZero = false;
     if (!glitchy) {
         changed('Metadata');
         return;
