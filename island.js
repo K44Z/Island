@@ -45,6 +45,9 @@ const NOTIFICATION_LINGER = 2000;
 const NOTIFICATION_BODY_MAX = 140;
 const NOTIFICATION_MAX_ACTIONS = 3;
 
+const EVENT_DEFAULT_LENGTH = 3600;
+const EVENT_DEFAULT_HOUR = 9;
+
 const EQ_BARS = 4;
 const EQ_INTERVAL = 170;
 const PROGRESS_INTERVAL = 500;
@@ -73,6 +76,31 @@ function plainText(text, markup) {
     return text.length > NOTIFICATION_BODY_MAX
         ? `${text.slice(0, NOTIFICATION_BODY_MAX - 1).trimEnd()}…`
         : text;
+}
+
+// Parses "14", "14:30", "1430", "2pm", "2:30 PM" into minutes since midnight.
+function parseTimeOfDay(text) {
+    const match = /^(\d{1,2})(?::?(\d{2}))?\s*([ap])?\.?m?\.?$/i.exec(text.trim());
+    if (!match)
+        return null;
+    let hours = parseInt(match[1], 10);
+    const minutes = match[2] ? parseInt(match[2], 10) : 0;
+    const meridiem = match[3]?.toLowerCase();
+    if (minutes > 59)
+        return null;
+    if (meridiem) {
+        if (hours < 1 || hours > 12)
+            return null;
+        hours = hours % 12 + (meridiem === 'p' ? 12 : 0);
+    } else if (hours > 23) {
+        return null;
+    }
+    return hours * 60 + minutes;
+}
+
+function formatDateStamp(date) {
+    const pad = n => String(n).padStart(2, '0');
+    return `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}`;
 }
 
 function makeButton(iconName, styleClass, accessibleName) {
@@ -248,8 +276,20 @@ class Island extends St.Widget {
             (_calendar, datetime) => this._showEvents(new Date(datetime.to_unix() * 1000)));
         this._calendarBox.add_child(this._calendar);
 
-        this._eventsTitle = new St.Label({style_class: 'island-events-title'});
-        this._calendarBox.add_child(this._eventsTitle);
+        const header = new St.BoxLayout({style_class: 'island-events-header'});
+        this._eventsTitle = new St.Label({
+            style_class: 'island-events-title',
+            x_expand: true,
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+        header.add_child(this._eventsTitle);
+        this._addEventButton = makeButton(
+            'list-add-symbolic', 'island-add-event', _('Add event'));
+        this._addEventButton.connect('clicked', () => this._toggleEventForm());
+        header.add_child(this._addEventButton);
+        this._calendarBox.add_child(header);
+
+        this._buildEventForm();
 
         this._eventsList = new St.BoxLayout({
             style_class: 'island-events-list',
@@ -259,6 +299,206 @@ class Island extends St.Widget {
 
         const now = new Date();
         this._eventsDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    }
+
+    _buildEventForm() {
+        this._eventFormOpen = false;
+        this._eventSaving = false;
+
+        this._eventForm = new St.BoxLayout({
+            style_class: 'island-event-form',
+            orientation: Clutter.Orientation.VERTICAL,
+            visible: false,
+        });
+
+        this._titleEntry = new St.Entry({
+            style_class: 'island-entry',
+            hint_text: _('Event title'),
+            can_focus: true,
+            x_expand: true,
+        });
+        this._eventForm.add_child(this._titleEntry);
+
+        const times = new St.BoxLayout({style_class: 'island-event-times'});
+        this._startEntry = new St.Entry({
+            style_class: 'island-entry island-time-entry',
+            hint_text: _('Start'),
+            can_focus: true,
+            x_expand: true,
+        });
+        this._endEntry = new St.Entry({
+            style_class: 'island-entry island-time-entry',
+            hint_text: _('End'),
+            can_focus: true,
+            x_expand: true,
+        });
+        this._allDayButton = new St.Button({
+            style_class: 'island-toggle',
+            label: _('All day'),
+            toggle_mode: true,
+            can_focus: true,
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+        this._allDayButton.connect('notify::checked', () => {
+            this._startEntry.reactive = this._endEntry.reactive = !this._allDayButton.checked;
+            this._startEntry.opacity = this._endEntry.opacity = this._allDayButton.checked ? 90 : 255;
+        });
+        times.add_child(this._startEntry);
+        times.add_child(new St.Label({
+            style_class: 'island-time-dash',
+            text: '–',
+            y_align: Clutter.ActorAlign.CENTER,
+        }));
+        times.add_child(this._endEntry);
+        times.add_child(this._allDayButton);
+        this._eventForm.add_child(times);
+
+        this._eventError = new St.Label({
+            style_class: 'island-event-error',
+            visible: false,
+        });
+        this._eventError.clutter_text.line_wrap = true;
+        this._eventForm.add_child(this._eventError);
+
+        const actions = new St.BoxLayout({style_class: 'island-event-actions'});
+        const cancel = new St.Button({
+            style_class: 'island-notification-action',
+            label: _('Cancel'),
+            x_expand: true,
+            can_focus: true,
+        });
+        cancel.connect('clicked', () => this._closeEventForm());
+        this._saveEventButton = new St.Button({
+            style_class: 'island-notification-action island-save-event',
+            label: _('Add'),
+            x_expand: true,
+            can_focus: true,
+        });
+        this._saveEventButton.connect('clicked', () => this._saveEvent());
+        actions.add_child(cancel);
+        actions.add_child(this._saveEventButton);
+        this._eventForm.add_child(actions);
+
+        for (const entry of [this._titleEntry, this._startEntry, this._endEntry])
+            entry.clutter_text.connect('activate', () => this._saveEvent());
+
+        this._calendarBox.add_child(this._eventForm);
+    }
+
+    _toggleEventForm() {
+        if (this._eventFormOpen)
+            this._closeEventForm();
+        else
+            this._openEventForm();
+    }
+
+    _openEventForm() {
+        const day = this._eventsDate;
+        const now = new Date();
+        const isToday = formatDateStamp(day) === formatDateStamp(now);
+        const hour = isToday ? Math.min(now.getHours() + 1, 23) : EVENT_DEFAULT_HOUR;
+        const start = new Date(day.getFullYear(), day.getMonth(), day.getDate(), hour);
+        const end = new Date(start.getTime() + EVENT_DEFAULT_LENGTH * 1000);
+
+        this._titleEntry.text = '';
+        this._startEntry.text = formatClockTime(start, {timeOnly: true});
+        this._endEntry.text = formatClockTime(end, {timeOnly: true});
+        this._allDayButton.checked = false;
+        this._setEventError(null);
+
+        this._eventFormOpen = true;
+        this._eventForm.show();
+        this._clearTimeout('collapse');
+        this._resize(true);
+        this._titleEntry.grab_key_focus();
+    }
+
+    _closeEventForm() {
+        if (!this._eventFormOpen)
+            return;
+        this._eventFormOpen = false;
+        this._eventForm.hide();
+        this._setEventSaving(false);
+        if (this._view === 'calendar')
+            this._resize(true);
+    }
+
+    _setEventError(message) {
+        this._eventError.text = message ?? '';
+        this._eventError.visible = !!message;
+        if (this._eventFormOpen)
+            this._resize(true);
+    }
+
+    _setEventSaving(saving) {
+        this._eventSaving = saving;
+        this._saveEventButton.reactive = !saving;
+        this._saveEventButton.label = saving ? _('Adding…') : _('Add');
+    }
+
+    _readEventForm() {
+        const summary = this._titleEntry.text.trim();
+        if (!summary)
+            return {error: _('Give the event a title')};
+
+        const day = this._eventsDate;
+        if (this._allDayButton.checked) {
+            const next = new Date(day.getFullYear(), day.getMonth(), day.getDate() + 1);
+            return {request: {
+                summary,
+                allDay: true,
+                start: formatDateStamp(day),
+                end: formatDateStamp(next),
+            }};
+        }
+
+        const from = parseTimeOfDay(this._startEntry.text);
+        if (from === null)
+            return {error: _('Start time should look like 14:30')};
+        const endText = this._endEntry.text.trim();
+        const to = endText
+            ? parseTimeOfDay(endText)
+            : from + EVENT_DEFAULT_LENGTH / 60;
+        if (to === null)
+            return {error: _('End time should look like 15:30')};
+        if (to <= from)
+            return {error: _('The event must end after it starts')};
+
+        const at = minutes => new Date(
+            day.getFullYear(), day.getMonth(), day.getDate(),
+            0, minutes).getTime() / 1000;
+        return {request: {summary, allDay: false, start: at(from), end: at(to)}};
+    }
+
+    async _saveEvent() {
+        if (this._eventSaving)
+            return;
+        const {request, error} = this._readEventForm();
+        if (error) {
+            this._setEventError(error);
+            return;
+        }
+
+        this._setEventError(null);
+        this._setEventSaving(true);
+        try {
+            const process = Gio.Subprocess.new(
+                ['gjs', '-m', `${this._path}/add-event.js`, JSON.stringify(request)],
+                Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE);
+            const [stdout, stderr] = await process.communicate_utf8_async(null, null);
+            if (this._destroyed)
+                return;
+            if (!stdout?.trim())
+                throw new Error(stderr?.trim() || _('Could not add the event'));
+        } catch (e) {
+            if (this._destroyed)
+                return;
+            this._setEventSaving(false);
+            this._setEventError(e.message);
+            return;
+        }
+        this._closeEventForm();
+        this._reloadEvents();
     }
 
     _resetCalendar() {
@@ -860,6 +1100,8 @@ class Island extends St.Widget {
             return;
 
         this._expanded = card !== null;
+        if (card !== 'calendar')
+            this._closeEventForm();
         if (card === 'calendar')
             this._resetCalendar();
         this._setView(card ?? 'compact');
@@ -1068,7 +1310,7 @@ class Island extends St.Widget {
                 });
         } else {
             this._clearTimeout('expand');
-            if (this._expanded && !this._dragging)
+            if (this._expanded && !this._dragging && !this._eventFormOpen)
                 this._startTimeout('collapse', HOVER_COLLAPSE_DELAY, () => this.setExpanded(false));
         }
         this._updateVisibility();
@@ -1433,6 +1675,7 @@ class Island extends St.Widget {
     }
 
     _onDestroy() {
+        this._destroyed = true;
         this._grabHelper.ungrab({actor: this});
         this._notification?.disconnectObject(this);
         this._notification = null;

@@ -1,6 +1,6 @@
 UUID     := island@k44z
 EXT_DIR  := $(HOME)/.local/share/gnome-shell/extensions/$(UUID)
-SOURCES  := mpris.js island.js art.js icons
+SOURCES  := mpris.js island.js art.js add-event.js icons
 
 .PHONY: schemas install uninstall enable pack nested mock logs
 

@@ -349,6 +349,99 @@
   padding: 8px 6px 2px;
 }
 
+.island-events-header {
+  spacing: 6px;
+}
+
+.island-add-event {
+  padding: 5px;
+  margin-top: 4px;
+}
+
+.island-add-event-icon {
+  icon-size: 16px;
+}
+
+.island-event-form {
+  spacing: 8px;
+  margin: 4px 6px 0;
+  padding: 10px;
+  border-radius: 16px;
+  background-color: rgba(255, 255, 255, 0.07);
+}
+
+.island-entry {
+  min-height: 20px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  background-color: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  caret-color: #fff;
+  selection-background-color: -st-accent-color;
+  selected-color: -st-accent-fg-color;
+  font-size: 10pt;
+  box-shadow: none;
+}
+
+.island-entry:focus {
+  border-color: -st-accent-color;
+  background-color: rgba(255, 255, 255, 0.14);
+}
+
+.island-entry StLabel.hint-text {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.island-event-times {
+  spacing: 6px;
+}
+
+.island-time-entry {
+  width: 70px;
+}
+
+.island-time-dash {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.island-toggle {
+  border-radius: 999px;
+  padding: 5px 10px;
+  background-color: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 9.5pt;
+  font-weight: 600;
+  transition-duration: 150ms;
+}
+
+.island-toggle:hover {
+  background-color: rgba(255, 255, 255, 0.18);
+}
+
+.island-toggle:checked {
+  background-color: -st-accent-color;
+  color: -st-accent-fg-color;
+}
+
+.island-event-error {
+  font-size: 9pt;
+  color: #ff8a80;
+}
+
+.island-event-actions {
+  spacing: 8px;
+}
+
+.island-save-event {
+  background-color: -st-accent-color;
+  color: -st-accent-fg-color;
+}
+
+.island-save-event:hover {
+  background-color: -st-accent-color;
+}
+
 .island-events-list {
   spacing: 6px;
   padding: 0 6px;

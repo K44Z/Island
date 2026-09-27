@@ -10,7 +10,8 @@ for media, the time and notifications.
   several players are running. Middle-click the pill to play/pause.
 - **Date and time:** placed inside the top bar, the pill shows the date and
   time in place of GNOME's clock while it is visible. Click them to open the
-  calendar: a month view with your events for the selected day.
+  calendar: a month view with your events for the selected day. Hit **+** to
+  add an event (title, start/end time or all day) to your default calendar.
 - **Notifications:** incoming notifications open the island into a card with
   the app, title, message and action buttons, then shrink back after a few
   seconds. Click the card to open it; urgent ones stay until dismissed.
@@ -27,6 +28,7 @@ It hides when there is nothing to show.
 | `extension.js` | Entry point: `enable()` builds everything, `disable()` tears it down |
 | `mpris.js` | Talks to media players over D-Bus (MPRIS), picks the current player |
 | `island.js` | The UI: compact pill, expanded card, animations |
+| `add-event.js` | Helper process that creates an event in Evolution Data Server |
 | `art.js` | Turns cover URLs into local files (downloads remote covers to `~/.cache/island`) |
 | `stylesheet.css` | All styling |
 | `prefs.js` | Settings window (GTK4 + libadwaita, runs outside the shell) |
