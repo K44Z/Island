@@ -17,6 +17,7 @@ const SHORTCUTS = [
     ['seek-forward', () => _('Seek forward')],
     ['next-player', () => _('Switch player')],
     ['toggle-calendar', () => _('Calendar')],
+    ['toggle-todo', () => _('Todo list')],
 ];
 
 const ShortcutRow = GObject.registerClass(
@@ -107,7 +108,7 @@ export default class IslandPreferences extends ExtensionPreferences {
 
         const placement = new Adw.ComboRow({
             title: _('Placement'),
-            subtitle: _('Inside the top bar, the island shows the time in place of the clock while media plays'),
+            subtitle: _('Inside the top bar, the island always replaces the clock'),
             model: Gtk.StringList.new([_('Below the top bar'), _('Inside the top bar')]),
         });
         placement.selected = Math.max(0, PLACEMENTS.indexOf(settings.get_string('placement')));
@@ -135,6 +136,13 @@ export default class IslandPreferences extends ExtensionPreferences {
         });
         settings.bind('hide-when-paused', hidePaused, 'active', Gio.SettingsBindFlags.DEFAULT);
         behavior.add(hidePaused);
+
+        const transparent = new Adw.SwitchRow({
+            title: _('Transparent background'),
+            subtitle: _('Use a translucent background instead of solid black'),
+        });
+        settings.bind('transparent-background', transparent, 'active', Gio.SettingsBindFlags.DEFAULT);
+        behavior.add(transparent);
 
         const seek = new Adw.SpinRow({
             title: _('Seek step'),

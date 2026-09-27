@@ -28,6 +28,14 @@
       <default>true</default>
       <summary>Hide the island a few seconds after every player is paused</summary>
     </key>
+    <key name="transparent-background" type="b">
+      <default>false</default>
+      <summary>Use a translucent background instead of solid black</summary>
+    </key>
+    <key name="todos" type="s">
+      <default>'[]'</default>
+      <summary>Todo items, as a JSON array of {id, text, done}</summary>
+    </key>
 
     <key name="toggle-island" type="as">
       <default><![CDATA[['<Super><Control>m']]]></default>
@@ -56,6 +64,10 @@
     <key name="toggle-calendar" type="as">
       <default><![CDATA[['<Super><Control>c']]]></default>
       <summary>Open or close the calendar</summary>
+    </key>
+    <key name="toggle-todo" type="as">
+      <default><![CDATA[['<Super><Control>t']]]></default>
+      <summary>Open or close the todo list</summary>
     </key>
     <key name="next-player" type="as">
       <default><![CDATA[['<Super><Control>p']]]></default>

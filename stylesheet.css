@@ -5,6 +5,11 @@
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
 }
 
+.island.island-transparent {
+  background-color: rgba(0, 0, 0, 0.28);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
 .island-compact {
   padding: 0 10px 0 6px;
   border-radius: 999px;
@@ -37,6 +42,11 @@
 
 .island-compact-media-box {
   spacing: 9px;
+}
+
+.island-compact-todo-icon {
+  icon-size: 15px;
+  color: rgba(255, 255, 255, 0.85);
 }
 
 .island-compact-title {
@@ -472,6 +482,52 @@
 .island-event-empty {
   font-size: 10pt;
   color: rgba(255, 255, 255, 0.45);
+}
+
+.island-event-remove {
+  padding: 5px;
+}
+
+.island-event-remove-icon {
+  icon-size: 14px;
+}
+
+.island-todo {
+  padding: 12px 14px 16px;
+  spacing: 8px;
+}
+
+.island-todo-item {
+  spacing: 8px;
+}
+
+.island-todo-check {
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+}
+
+.island-todo-check:hover {
+  border-color: rgba(255, 255, 255, 0.7);
+}
+
+.island-todo-check-icon {
+  icon-size: 13px;
+  color: -st-accent-color;
+}
+
+.island-todo-text {
+  font-size: 10pt;
+  color: #fff;
+}
+
+.island-todo-remove {
+  padding: 5px;
+}
+
+.island-todo-remove-icon {
+  icon-size: 14px;
 }
 
 .island-switcher {

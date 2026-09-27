@@ -19,6 +19,9 @@ import {formatDateWithCFormatString, formatTime as formatClockTime} from 'resour
 import {ArtCache} from './art.js';
 import {byName} from './mpris.js';
 
+
+Gio._promisify(Gio.Subprocess.prototype, 'communicate_utf8_async', 'communicate_utf8_finish');
+
 const COMPACT_TITLE_MIN = 24;
 const COMPACT_TITLE_MAX = 280;
 const COMPACT_HEIGHT = 34;
@@ -191,6 +194,7 @@ class Island extends St.Widget {
         this._mediaWanted = false;
         this._notification = null;
         this._calendarRequested = false;
+        this._todoRequested = false;
         this._dragging = false;
         this._pausedLongEnough = false;
         this._player = null;
@@ -219,7 +223,9 @@ class Island extends St.Widget {
             'changed::show-notifications', () => {
                 if (!this._settings.get_boolean('show-notifications'))
                     this._endNotification();
-            }, this);
+            },
+            'changed::todos', () => this._renderTodos(),
+            'changed::transparent-background', () => this._updateTransparency(), this);
         Main.layoutManager.connectObject('monitors-changed',
             () => this._updateGeometry(), this);
         Main.panel.connectObject('notify::height',
@@ -255,6 +261,15 @@ class Island extends St.Widget {
         this._buildExpanded();
         this._buildNotification();
         this._buildCalendar();
+        this._buildTodo();
+        this._renderTodos();
+        this._updateTransparency();
+    }
+
+    _updateTransparency() {
+        this.set_style_class_name(this._settings.get_boolean('transparent-background')
+            ? 'island island-transparent'
+            : 'island');
     }
 
     _buildCalendar() {
@@ -291,6 +306,13 @@ class Island extends St.Widget {
         this._addEventButton.connect('clicked', () => this._toggleEventForm());
         header.add_child(this._addEventButton);
         this._calendarBox.add_child(header);
+
+        this._eventError = new St.Label({
+            style_class: 'island-event-error',
+            visible: false,
+        });
+        this._eventError.clutter_text.line_wrap = true;
+        this._calendarBox.add_child(this._eventError);
 
         this._buildEventForm();
 
@@ -355,13 +377,6 @@ class Island extends St.Widget {
         times.add_child(this._endEntry);
         times.add_child(this._allDayButton);
         this._eventForm.add_child(times);
-
-        this._eventError = new St.Label({
-            style_class: 'island-event-error',
-            visible: false,
-        });
-        this._eventError.clutter_text.line_wrap = true;
-        this._eventForm.add_child(this._eventError);
 
         const actions = new St.BoxLayout({style_class: 'island-event-actions'});
         const cancel = new St.Button({
@@ -429,7 +444,7 @@ class Island extends St.Widget {
     _setEventError(message) {
         this._eventError.text = message ?? '';
         this._eventError.visible = !!message;
-        if (this._eventFormOpen)
+        if (this._view === 'calendar')
             this._resize(true);
     }
 
@@ -504,6 +519,27 @@ class Island extends St.Widget {
         this._reloadEvents();
     }
 
+
+    async _deleteEvent(event) {
+        const [sourceUid, uid, rid] = event.id.split('\n');
+        try {
+            const process = Gio.Subprocess.new(
+                ['gjs', '-m', `${this._path}/remove-event.js`, JSON.stringify({sourceUid, uid, rid})],
+                Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE);
+            const [stdout, stderr] = await process.communicate_utf8_async(null, null);
+            if (this._destroyed)
+                return;
+            if (!stdout?.trim())
+                throw new Error(stderr?.trim() || _('Could not delete the event'));
+        } catch (e) {
+            if (this._destroyed)
+                return;
+            this._setEventError(e.message);
+            return;
+        }
+        this._reloadEvents();
+    }
+
     _resetCalendar() {
         const today = new Date();
         this._calendar.setDate(today);
@@ -554,6 +590,11 @@ class Island extends St.Widget {
                 text: this._formatEventTime(event, start, end),
             }));
             row.add_child(text);
+
+            const remove = makeButton('edit-delete-symbolic', 'island-event-remove', _('Delete event'));
+            remove.connect('clicked', () => this._deleteEvent(event));
+            row.add_child(remove);
+
             this._eventsList.add_child(row);
         }
 
@@ -574,6 +615,130 @@ class Island extends St.Widget {
         const from = formatClockTime(event.date, {timeOnly: true});
         const to = formatClockTime(event.end, {timeOnly: true});
         return event.date.getTime() === event.end.getTime() ? from : `${from} – ${to}`;
+    }
+
+    _buildTodo() {
+        this._todoBox = new St.BoxLayout({
+            style_class: 'island-todo',
+            orientation: Clutter.Orientation.VERTICAL,
+            x_align: Clutter.ActorAlign.CENTER,
+            y_align: Clutter.ActorAlign.START,
+            opacity: 0,
+            visible: false,
+        });
+        this._clip.add_child(this._todoBox);
+
+        const header = new St.BoxLayout({style_class: 'island-events-header'});
+        header.add_child(new St.Label({
+            style_class: 'island-events-title',
+            text: _('Todo'),
+            x_expand: true,
+            y_align: Clutter.ActorAlign.CENTER,
+        }));
+        this._todoBox.add_child(header);
+
+        this._todoEntry = new St.Entry({
+            style_class: 'island-entry',
+            hint_text: _('Add a task…'),
+            can_focus: true,
+            x_expand: true,
+        });
+        this._todoEntry.clutter_text.connect('activate', () => this._addTodo());
+        this._todoBox.add_child(this._todoEntry);
+
+        this._todoList = new St.BoxLayout({
+            style_class: 'island-events-list',
+            orientation: Clutter.Orientation.VERTICAL,
+        });
+        this._todoBox.add_child(this._todoList);
+    }
+
+    _loadTodos() {
+        try {
+            const list = JSON.parse(this._settings.get_string('todos'));
+            return Array.isArray(list) ? list : [];
+        } catch {
+            return [];
+        }
+    }
+
+    _saveTodos(list) {
+        this._settings.set_string('todos', JSON.stringify(list));
+    }
+
+    _addTodo() {
+        const text = this._todoEntry.text.trim();
+        if (!text)
+            return;
+        const list = this._loadTodos();
+        list.push({id: GLib.uuid_string_random(), text, done: false});
+        this._saveTodos(list);
+        this._todoEntry.text = '';
+    }
+
+    _toggleTodo(id) {
+        const list = this._loadTodos();
+        const item = list.find(t => t.id === id);
+        if (!item)
+            return;
+        item.done = !item.done;
+        this._saveTodos(list);
+    }
+
+    _removeTodo(id) {
+        this._saveTodos(this._loadTodos().filter(t => t.id !== id));
+    }
+
+    _renderTodos() {
+        this._todoList.destroy_all_children();
+        const list = this._loadTodos();
+
+        for (const item of list) {
+            const row = new St.BoxLayout({style_class: 'island-todo-item'});
+
+            const check = new St.Button({
+                style_class: 'island-todo-check',
+                can_focus: true,
+                child: new St.Icon({
+                    icon_name: 'object-select-symbolic',
+                    style_class: 'island-todo-check-icon',
+                    visible: item.done,
+                }),
+                accessible_name: item.done ? _('Mark as not done') : _('Mark as done'),
+            });
+            check.connect('clicked', () => this._toggleTodo(item.id));
+            row.add_child(check);
+
+            const label = new St.Label({
+                style_class: 'island-todo-text',
+                x_expand: true,
+                y_align: Clutter.ActorAlign.CENTER,
+            });
+            label.clutter_text.ellipsize = Pango.EllipsizeMode.END;
+            if (item.done) {
+                label.clutter_text.set_markup(`<s>${GLib.markup_escape_text(item.text, -1)}</s>`);
+                label.opacity = 140;
+            } else {
+                label.text = item.text;
+            }
+            row.add_child(label);
+
+            const remove = makeButton('edit-delete-symbolic', 'island-todo-remove', _('Delete task'));
+            remove.connect('clicked', () => this._removeTodo(item.id));
+            row.add_child(remove);
+
+            this._todoList.add_child(row);
+        }
+
+        if (list.length === 0) {
+            this._todoList.add_child(new St.Label({
+                style_class: 'island-event-empty',
+                text: _('No tasks'),
+            }));
+        }
+
+        if (this._view === 'todo')
+            this._resize(true);
     }
 
     _buildNotification() {
@@ -743,6 +908,11 @@ class Island extends St.Widget {
             this._eqBars.push(bar);
         }
         box.add_child(this._eq);
+
+        this._todoButton = makeButton('view-list-bullet-symbolic', 'island-compact-todo', _('Todo list'));
+        this._todoButton.y_align = Clutter.ActorAlign.CENTER;
+        this._todoButton.connect('clicked', () => this.toggleTodo());
+        this._compactBox.add_child(this._todoButton);
     }
 
     _buildExpanded() {
@@ -893,6 +1063,7 @@ class Island extends St.Widget {
         this._compact.set_size(this._compactWidth, this._compactHeight);
         this._expandedBox.width = this._expandedWidth;
         this._notificationBox.width = this._notificationWidth;
+        this._todoBox.width = this._notificationWidth;
         this._resize(false);
         this._reposition();
         this._updateClock(true);
@@ -913,6 +1084,10 @@ class Island extends St.Widget {
         }
         if (this._view === 'notification') {
             const [, height] = this._notificationBox.get_preferred_height(this._notificationWidth);
+            return [this._notificationWidth, height];
+        }
+        if (this._view === 'todo') {
+            const [, height] = this._todoBox.get_preferred_height(this._notificationWidth);
             return [this._notificationWidth, height];
         }
         if (this._view === 'expanded') {
@@ -986,6 +1161,13 @@ class Island extends St.Widget {
             : monitor.y + panelHeight + this._gap;
         const x = monitor.x + Math.round((monitor.width - this.width) / 2);
         this.set_position(x, y);
+
+        // Moving/resizing the actor under a stationary pointer doesn't fire a
+        // crossing event, so `hover` can get stuck true (most noticeably: a
+        // notification that never auto-dismisses because _scheduleNotificationEnd
+        // refuses to arm while hover is true). Re-sync it against the pointer's
+        // actual position every time we move.
+        this.sync_hover();
     }
 
     _syncTime() {
@@ -1068,6 +1250,7 @@ class Island extends St.Widget {
             expanded: this._expandedBox,
             notification: this._notificationBox,
             calendar: this._calendarBox,
+            todo: this._todoBox,
         };
         const incoming = actors[view];
         const outgoing = actors[this._view];
@@ -1120,8 +1303,9 @@ class Island extends St.Widget {
         }
 
         this._grabHelper.ungrab({actor: this});
-        if (this._calendarRequested) {
+        if (this._calendarRequested || this._todoRequested) {
             this._calendarRequested = false;
+            this._todoRequested = false;
             this._updateVisibility();
         }
         this._pullNotifications();
@@ -1146,6 +1330,29 @@ class Island extends St.Widget {
         }
         this.showCalendar();
         if (this._view === 'calendar' && !this.hover)
+            this._startTimeout('collapse', CALENDAR_AUTO_COLLAPSE_DELAY, () => this._setCard(null));
+    }
+
+    showTodo() {
+        if (this._notification)
+            this._endNotification();
+        this._todoRequested = true;
+        this._updateVisibility();
+        if (!this._shown || this._suppressed) {
+            this._todoRequested = false;
+            return;
+        }
+        this._setCard('todo');
+        this._todoEntry.grab_key_focus();
+    }
+
+    toggleTodo() {
+        if (this._expanded && this._view === 'todo') {
+            this._setCard(null);
+            return;
+        }
+        this.showTodo();
+        if (this._view === 'todo' && !this.hover)
             this._startTimeout('collapse', CALENDAR_AUTO_COLLAPSE_DELAY, () => this._setCard(null));
     }
 
@@ -1362,7 +1569,7 @@ class Island extends St.Widget {
         if (this._shown && !this._notification && hadMedia !== wanted && wanted)
             this._compact.set({visible: true, opacity: 255});
 
-        if (wanted || this._notification || this._calendarRequested || this._topBar)
+        if (wanted || this._notification || this._calendarRequested || this._todoRequested || this._topBar)
             this._show();
         else
             this._hide();
@@ -1398,11 +1605,13 @@ class Island extends St.Widget {
         this._expandedBox.remove_all_transitions();
         this._notificationBox.remove_all_transitions();
         this._calendarBox.remove_all_transitions();
-        const startInCompact = !this._notification && !this._calendarRequested;
+        this._todoBox.remove_all_transitions();
+        const startInCompact = !this._notification && !this._calendarRequested && !this._todoRequested;
         this._compact.set({visible: true, opacity: startInCompact ? 255 : 0});
         this._expandedBox.set({visible: false, opacity: 0});
         this._notificationBox.set({visible: false, opacity: 0});
         this._calendarBox.set({visible: false, opacity: 0});
+        this._todoBox.set({visible: false, opacity: 0});
         this._resize(false);
         this._reposition();
 
