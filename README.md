@@ -8,15 +8,17 @@ for media, the time and notifications.
   album art, title, artist and album, a seekable progress bar, previous /
   play-pause / next, ±N second seek, shuffle, repeat and a switcher when
   several players are running. Middle-click the pill to play/pause.
-- **Date and time:** placed inside the top bar, the pill shows the date and
-  time in place of GNOME's clock while it is visible. Click them to open the
-  calendar: a month view with your events for the selected day. Hit **+** to
-  add an event (title, start/end time or all day) to your default calendar.
+- **Date and time:** placed inside the top bar, the pill always sits in place
+  of GNOME's clock, showing just the date and time when nothing else is
+  going on. Click them to open the calendar: a month view with your events
+  for the selected day. Hit **+** to add an event (title, start/end time or
+  all day) to your default calendar.
 - **Notifications:** incoming notifications open the island into a card with
   the app, title, message and action buttons, then shrink back after a few
   seconds. Click the card to open it; urgent ones stay until dismissed.
 
-It hides when there is nothing to show.
+In the top bar it's always present. Placed below the top bar instead, it
+hides when there is nothing to show.
 
 ![Island demo](assets/demo.gif)
 

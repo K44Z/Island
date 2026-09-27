@@ -210,7 +210,10 @@ class Island extends St.Widget {
             'changed', () => this._sync(),
             'current-changed', () => this._onCurrentChanged(), this);
         this._settings.connectObject(
-            'changed::placement', () => this._updateGeometry(),
+            'changed::placement', () => {
+                this._updateGeometry();
+                this._updateVisibility();
+            },
             'changed::seek-step', () => this._syncSeekLabels(),
             'changed::hide-when-paused', () => this._updateVisibility(),
             'changed::show-notifications', () => {
@@ -995,9 +998,11 @@ class Island extends St.Widget {
     _measureCompactWidth() {
         const scale = this._scale ?? 1;
         const [, boxWidth] = this._compactBox.get_preferred_width(-1);
+        const padding = this._compact.get_theme_node().get_horizontal_padding();
+        if (!this._mediaButton.visible)
+            return Math.ceil(boxWidth + padding);
         const [, titleWidth] = this._compactTitle.get_preferred_width(-1);
         const title = Math.clamp(titleWidth, COMPACT_TITLE_MIN * scale, COMPACT_TITLE_MAX * scale);
-        const padding = this._compact.get_theme_node().get_horizontal_padding();
         return Math.ceil(boxWidth - titleWidth + title + padding);
     }
 
@@ -1352,10 +1357,12 @@ class Island extends St.Widget {
 
         const hadMedia = this._mediaWanted;
         this._mediaWanted = wanted;
+        this._mediaButton.visible = wanted;
+        this._updateCompactWidth();
         if (this._shown && !this._notification && hadMedia !== wanted && wanted)
             this._compact.set({visible: true, opacity: 255});
 
-        if (wanted || this._notification || this._calendarRequested)
+        if (wanted || this._notification || this._calendarRequested || this._topBar)
             this._show();
         else
             this._hide();
@@ -1391,7 +1398,8 @@ class Island extends St.Widget {
         this._expandedBox.remove_all_transitions();
         this._notificationBox.remove_all_transitions();
         this._calendarBox.remove_all_transitions();
-        this._compact.set({visible: true, opacity: this._mediaWanted ? 255 : 0});
+        const startInCompact = !this._notification && !this._calendarRequested;
+        this._compact.set({visible: true, opacity: startInCompact ? 255 : 0});
         this._expandedBox.set({visible: false, opacity: 0});
         this._notificationBox.set({visible: false, opacity: 0});
         this._calendarBox.set({visible: false, opacity: 0});
