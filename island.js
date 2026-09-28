@@ -770,7 +770,7 @@ class Island extends St.Widget {
         header.add_child(this._senderName);
 
         const close = makeButton('window-close-symbolic', 'island-notification-close', _('Dismiss'));
-        close.connect('clicked', () => this._endNotification());
+        close.connect('clicked', () => this._dismissNotification());
         header.add_child(close);
 
         const row = new St.BoxLayout({
@@ -1448,6 +1448,21 @@ class Island extends St.Widget {
         this._startTimeout('notification', delay, () => this._endNotification());
     }
 
+    _dismissNotification() {
+        const notification = this._notification;
+        if (notification) {
+            // An update that arrived while shown is re-queued by the tray and
+            // would pop straight back up once this one ends.
+            const tray = Main.messageTray;
+            const queue = tray._notificationQueue ?? [];
+            if (queue.includes(notification)) {
+                tray._notificationQueue = queue.filter(n => n !== notification);
+                tray.emit('queue-changed');
+            }
+        }
+        this._endNotification();
+    }
+
     _activateNotification() {
         const notification = this._notification;
         if (!notification)
@@ -1469,7 +1484,7 @@ class Island extends St.Widget {
         if (this._notification)
             return;
 
-        if (this._mediaWanted && this._shown)
+        if ((this._mediaWanted || this._topBar) && this._shown)
             this._setView('compact');
         this._updateVisibility();
         this._syncTimers();
