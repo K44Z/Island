@@ -30,7 +30,7 @@ for media, the time and notifications.
 In the top bar it's always present. Placed below the top bar instead, it
 hides when there is nothing to show.
 
-<video src="assets/demo.mp4" controls muted loop width="100%"></video>
+![Island demo](assets/demo.gif)
 
 
 ## Develop
