@@ -17,29 +17,21 @@ for media, the time and notifications.
 - **Notifications:** incoming notifications open the island into a card with
   the app, title, message and action buttons, then shrink back after a few
   seconds. Click the card to open it; urgent ones stay until dismissed.
+- **Blip transfers:** with [Blip](https://blip.net) installed, the island
+  announces incoming files ("Receiving…" with progress and speed, then "File
+  received" with Open / Show in folder) and the files you send. Click the send
+  icon in the pill to pick one of your devices, then drop files on the window
+  that opens, paste them with Ctrl+V (copied files, an image or text), or
+  choose them. Needs Blip's desktop app to be started from its
+  launcher, so its log reaches the journal.
 - **Todo list:** click the list icon in the pill to add tasks, check them
   off or delete them. Stored locally in the extension's settings.
 
 In the top bar it's always present. Placed below the top bar instead, it
 hides when there is nothing to show.
 
-![Island demo](assets/demo.gif)
+<video src="assets/demo.mp4" controls muted loop width="100%"></video>
 
-## Files
-
-| File | What it does |
-| --- | --- |
-| `metadata.json` | Extension id, name, supported shell versions |
-| `extension.js` | Entry point: `enable()` builds everything, `disable()` tears it down |
-| `mpris.js` | Talks to media players over D-Bus (MPRIS), picks the current player |
-| `island.js` | The UI: compact pill, expanded card, animations |
-| `add-event.js` | Helper process that creates an event in Evolution Data Server |
-| `remove-event.js` | Helper process that deletes an event from Evolution Data Server |
-| `art.js` | Turns cover URLs into local files (downloads remote covers to `~/.cache/island`) |
-| `stylesheet.css` | All styling |
-| `prefs.js` | Settings window (GTK4 + libadwaita, runs outside the shell) |
-| `schemas/` | GSettings schema for the settings and shortcuts |
-| `tools/mock-player.js` | Fake MPRIS player for testing |
 
 ## Develop
 

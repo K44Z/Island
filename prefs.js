@@ -123,6 +123,13 @@ export default class IslandPreferences extends ExtensionPreferences {
         settings.bind('show-notifications', notifications, 'active', Gio.SettingsBindFlags.DEFAULT);
         behavior.add(notifications);
 
+        const blip = new Adw.SwitchRow({
+            title: _('Blip transfers'),
+            subtitle: _('Announce files received through Blip'),
+        });
+        settings.bind('show-blip-transfers', blip, 'active', Gio.SettingsBindFlags.DEFAULT);
+        behavior.add(blip);
+
         const hover = new Adw.SwitchRow({
             title: _('Expand on hover'),
             subtitle: _('Otherwise, click the island to expand it'),

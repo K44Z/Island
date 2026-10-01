@@ -4,6 +4,7 @@ import Shell from 'gi://Shell';
 import {Extension, InjectionManager} from 'resource:///org/gnome/shell/extensions/extension.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
+import {BlipWatcher} from './blip.js';
 import {PlayerManager} from './mpris.js';
 import {Island} from './island.js';
 
@@ -11,13 +12,16 @@ export default class IslandExtension extends Extension {
     enable() {
         this._settings = this.getSettings();
         this._manager = new PlayerManager();
+        this._blip = new BlipWatcher(this._settings);
         this._island = new Island({
             settings: this._settings,
             manager: this._manager,
+            blip: this._blip,
             path: this.path,
         });
         Main.layoutManager.addChrome(this._island);
         this._island.start();
+        this._blip.start();
 
         const island = this._island;
         this._injectionManager = new InjectionManager();
@@ -65,6 +69,8 @@ export default class IslandExtension extends Extension {
             Main.wm.removeKeybinding(name);
         this._keybindings = null;
 
+        this._blip.destroy();
+        this._blip = null;
         this._island.destroy();
         this._island = null;
         this._manager.destroy();

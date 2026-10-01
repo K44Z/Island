@@ -49,6 +49,11 @@
   color: rgba(255, 255, 255, 0.85);
 }
 
+.island-compact-send-icon {
+  icon-size: 15px;
+  color: rgba(255, 255, 255, 0.85);
+}
+
 .island-compact-title {
   font-size: 10.5pt;
   font-weight: 600;
@@ -528,6 +533,46 @@
 
 .island-todo-remove-icon {
   icon-size: 14px;
+}
+
+.island-send {
+  padding: 12px 14px 16px;
+  spacing: 8px;
+}
+
+.island-device {
+  border-radius: 14px;
+  padding: 8px 10px;
+  background-color: rgba(255, 255, 255, 0.07);
+  transition-duration: 150ms;
+}
+
+.island-device:hover {
+  background-color: rgba(255, 255, 255, 0.14);
+}
+
+.island-device:active {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+.island-device-row {
+  spacing: 10px;
+}
+
+.island-device-icon {
+  icon-size: 18px;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.island-device-name {
+  font-size: 10.5pt;
+  font-weight: 600;
+  color: #fff;
+}
+
+.island-device-status {
+  font-size: 9pt;
+  color: rgba(255, 255, 255, 0.55);
 }
 
 .island-switcher {
