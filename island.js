@@ -696,12 +696,158 @@ class Island extends St.Widget {
         this._saveTodos(this._loadTodos().filter(t => t.id !== id));
     }
 
+    _editTodo(id, row, label) {
+        const item = this._loadTodos().find(t => t.id === id);
+        if (!item)
+            return;
+
+        const entry = new St.Entry({
+            style_class: 'island-entry island-todo-edit',
+            text: item.text,
+            can_focus: true,
+            x_expand: true,
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+        row.insert_child_above(entry, label);
+        label.hide();
+
+        let finished = false;
+        const finish = save => {
+            if (finished)
+                return;
+            finished = true;
+            const text = entry.text.trim();
+            if (save && text && text !== item.text) {
+                const list = this._loadTodos();
+                const current = list.find(t => t.id === id);
+                if (current) {
+                    current.text = text;
+                    this._saveTodos(list);
+                    return;
+                }
+            }
+            label.show();
+            entry.destroy();
+            this._resize(true);
+        };
+
+        entry.clutter_text.connect('activate', () => finish(true));
+        entry.clutter_text.connect('key-focus-out', () => finish(true));
+        entry.clutter_text.connect('key-press-event', (_actor, event) => {
+            if (event.get_key_symbol() !== Clutter.KEY_Escape)
+                return Clutter.EVENT_PROPAGATE;
+            finish(false);
+            return Clutter.EVENT_STOP;
+        });
+
+        this._resize(true);
+        entry.grab_key_focus();
+        entry.clutter_text.set_selection(0, -1);
+    }
+
+    _moveTodo(from, to) {
+        const list = this._loadTodos();
+        if (from === to || !list[from] || to < 0 || to >= list.length)
+            return;
+        list.splice(to, 0, list.splice(from, 1)[0]);
+        this._saveTodos(list);
+    }
+
+    _beginTodoDrag(handle, row, event) {
+        if (event.get_button() !== Clutter.BUTTON_PRIMARY)
+            return Clutter.EVENT_PROPAGATE;
+
+        const rows = this._todoList.get_children();
+        const from = rows.indexOf(row);
+        if (from < 0 || rows.length < 2)
+            return Clutter.EVENT_STOP;
+
+        const tops = rows.map(r => r.y);
+        const step = tops[1] - tops[0];
+        const last = rows.length - 1;
+        const pointerY = e => this._todoList.transform_stage_point(...e.get_coords())[2];
+        const startY = pointerY(event);
+        let to = from;
+
+        this._dragging = true;
+        row.add_style_class_name('dragging');
+        const grab = global.stage.grab(handle);
+
+        const finish = () => {
+            handle.disconnectObject(grab);
+            grab.dismiss();
+            this._dragging = false;
+            this._onHoverChanged();
+        };
+
+        handle.connectObject(
+            'motion-event', (_actor, e) => {
+                const dy = Math.max(tops[0] - tops[from],
+                    Math.min(tops[last] - tops[from], pointerY(e) - startY));
+                row.translation_y = dy;
+
+                const center = tops[from] + dy + row.height / 2;
+                const wanted = Math.max(0, Math.min(last, Math.floor((center - tops[0]) / step)));
+                if (wanted === to)
+                    return Clutter.EVENT_STOP;
+                to = wanted;
+
+                rows.forEach((r, i) => {
+                    if (i === from)
+                        return;
+                    let shift = 0;
+                    if (from < to && i > from && i <= to)
+                        shift = -step;
+                    else if (from > to && i >= to && i < from)
+                        shift = step;
+                    r.ease({
+                        translation_y: shift,
+                        duration: 150,
+                        mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+                    });
+                });
+                return Clutter.EVENT_STOP;
+            },
+            'button-release-event', () => {
+                finish();
+                if (to === from) {
+                    row.remove_style_class_name('dragging');
+                    row.ease({
+                        translation_y: 0,
+                        duration: 150,
+                        mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+                    });
+                } else {
+                    this._moveTodo(from, to);
+                }
+                return Clutter.EVENT_STOP;
+            },
+            'destroy', () => finish(),
+            grab);
+
+        return Clutter.EVENT_STOP;
+    }
+
     _renderTodos() {
         this._todoList.destroy_all_children();
         const list = this._loadTodos();
 
         for (const item of list) {
             const row = new St.BoxLayout({style_class: 'island-todo-item'});
+
+            if (list.length > 1) {
+                const handle = new St.Icon({
+                    icon_name: 'list-drag-handle-symbolic',
+                    style_class: 'island-todo-handle',
+                    reactive: true,
+                    track_hover: true,
+                    y_align: Clutter.ActorAlign.CENTER,
+                    accessible_name: _('Drag to reorder'),
+                });
+                handle.connect('button-press-event',
+                    (_actor, event) => this._beginTodoDrag(handle, row, event));
+                row.add_child(handle);
+            }
 
             const check = new St.Button({
                 style_class: 'island-todo-check',
@@ -720,6 +866,13 @@ class Island extends St.Widget {
                 style_class: 'island-todo-text',
                 x_expand: true,
                 y_align: Clutter.ActorAlign.CENTER,
+                reactive: true,
+            });
+            label.connect('button-press-event', (_actor, event) => {
+                if (event.get_button() !== Clutter.BUTTON_PRIMARY)
+                    return Clutter.EVENT_PROPAGATE;
+                this._editTodo(item.id, row, label);
+                return Clutter.EVENT_STOP;
             });
             label.clutter_text.ellipsize = Pango.EllipsizeMode.END;
             if (item.done) {

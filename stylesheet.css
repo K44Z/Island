@@ -506,6 +506,25 @@
   spacing: 8px;
 }
 
+.island-todo-item.dragging {
+  background-color: rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+}
+
+.island-todo-edit {
+  padding: 3px 8px;
+  border-radius: 8px;
+}
+
+.island-todo-handle {
+  icon-size: 14px;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.island-todo-handle:hover {
+  color: rgba(255, 255, 255, 0.8);
+}
+
 .island-todo-check {
   width: 18px;
   height: 18px;
