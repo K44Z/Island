@@ -541,6 +541,37 @@
   color: -st-accent-color;
 }
 
+.island-todo-priority {
+  padding: 4px;
+  border-radius: 8px;
+}
+
+.island-todo-priority-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 4px;
+}
+
+.island-todo-priority-dot.priority-0 {
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.island-todo-priority:hover .island-todo-priority-dot.priority-0 {
+  border-color: rgba(255, 255, 255, 0.7);
+}
+
+.island-todo-priority-dot.priority-1 {
+  background-color: #62a0ea;
+}
+
+.island-todo-priority-dot.priority-2 {
+  background-color: #f5c211;
+}
+
+.island-todo-priority-dot.priority-3 {
+  background-color: #ed333b;
+}
+
 .island-todo-text {
   font-size: 10pt;
   color: #fff;

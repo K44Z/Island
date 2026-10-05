@@ -25,7 +25,8 @@ for media, the time and notifications.
   choose them. Needs Blip's desktop app to be started from its
   launcher, so its log reaches the journal.
 - **Todo list:** click the list icon in the pill to add tasks, check them
-  off or delete them. Stored locally in the extension's settings.
+  off or delete them. Click the dot next to a task to set its priority (none,
+  low, medium, high). Stored locally in the extension's settings.
 
 In the top bar it's always present. Placed below the top bar instead, it
 hides when there is nothing to show.

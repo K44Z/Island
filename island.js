@@ -43,6 +43,7 @@ const PAUSED_HIDE_DELAY = 8000;
 
 const GONE_HIDE_DELAY = 1500;
 
+const TODO_PRIORITIES = [() => _('none'), () => _('low'), () => _('medium'), () => _('high')];
 const NOTIFICATION_WIDTH = 380;
 const NOTIFICATION_DURATION = 5000;
 const NOTIFICATION_LINGER = 2000;
@@ -678,7 +679,7 @@ class Island extends St.Widget {
         if (!text)
             return;
         const list = this._loadTodos();
-        list.push({id: GLib.uuid_string_random(), text, done: false});
+        this._insertAfterOpen(list, {id: GLib.uuid_string_random(), text, done: false, priority: 0});
         this._saveTodos(list);
         this._todoEntry.text = '';
     }
@@ -689,6 +690,27 @@ class Island extends St.Widget {
         if (!item)
             return;
         item.done = !item.done;
+        list.splice(list.indexOf(item), 1);
+        if (item.done)
+            list.push(item);
+        else
+            this._insertAfterOpen(list, item);
+        this._saveTodos(list);
+    }
+
+    // Open tasks stay above done ones: insert after the last open task.
+    _insertAfterOpen(list, item) {
+        const lastOpen = list.findLastIndex(t => !t.done);
+        list.splice(lastOpen + 1, 0, item);
+    }
+
+    // Cycles none -> low -> medium -> high -> none.
+    _cycleTodoPriority(id) {
+        const list = this._loadTodos();
+        const item = list.find(t => t.id === id);
+        if (!item)
+            return;
+        item.priority = ((item.priority ?? 0) + 1) % TODO_PRIORITIES.length;
         this._saveTodos(list);
     }
 
@@ -861,6 +883,24 @@ class Island extends St.Widget {
             });
             check.connect('clicked', () => this._toggleTodo(item.id));
             row.add_child(check);
+
+            const priority = TODO_PRIORITIES[item.priority] ? item.priority : 0;
+            const flag = new St.Button({
+                style_class: 'island-todo-priority',
+                can_focus: true,
+                y_align: Clutter.ActorAlign.CENTER,
+                child: new St.Widget({
+                    style_class: `island-todo-priority-dot priority-${priority}`,
+                    y_align: Clutter.ActorAlign.CENTER,
+                    x_align: Clutter.ActorAlign.CENTER,
+                }),
+                accessible_name: _('Priority: %s. Click to change').format(
+                    TODO_PRIORITIES[priority]()),
+            });
+            flag.connect('clicked', () => this._cycleTodoPriority(item.id));
+            if (item.done)
+                flag.opacity = 140;
+            row.add_child(flag);
 
             const label = new St.Label({
                 style_class: 'island-todo-text',
