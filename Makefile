@@ -1,6 +1,6 @@
 UUID     := island@k44z
 EXT_DIR  := $(HOME)/.local/share/gnome-shell/extensions/$(UUID)
-SOURCES  := mpris.js island.js blip.js blip-parse.js blip-send.js art.js add-event.js remove-event.js icons
+SOURCES  := mpris.js island.js blip.js blip-parse.js blip-send.js art.js add-event.js remove-event.js thunderbird.js icons
 
 .PHONY: schemas install uninstall enable pack nested mock logs
 

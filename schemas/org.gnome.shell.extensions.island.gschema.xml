@@ -24,6 +24,10 @@
       <default>true</default>
       <summary>Announce incoming Blip file transfers in the island</summary>
     </key>
+    <key name="show-mail-unread" type="b">
+      <default>true</default>
+      <summary>Show a button with the unread mail count that opens Thunderbird</summary>
+    </key>
     <key name="expand-on-hover" type="b">
       <default>true</default>
       <summary>Expand when the pointer hovers the island (otherwise expand on click)</summary>
@@ -38,7 +42,7 @@
     </key>
     <key name="todos" type="s">
       <default>'[]'</default>
-      <summary>Todo items, as a JSON array of {id, text, done}</summary>
+      <summary>Todo items, as a JSON array of {id, text, done, priority}</summary>
     </key>
 
     <key name="toggle-island" type="as">

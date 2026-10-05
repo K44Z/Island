@@ -18,6 +18,7 @@ import {formatDateWithCFormatString, formatTime as formatClockTime} from 'resour
 
 import {ArtCache} from './art.js';
 import {openSender} from './blip.js';
+import {APP_IDS as MAIL_APP_IDS, readUnread} from './thunderbird.js';
 import {byName} from './mpris.js';
 
 
@@ -44,6 +45,7 @@ const PAUSED_HIDE_DELAY = 8000;
 const GONE_HIDE_DELAY = 1500;
 
 const TODO_PRIORITIES = [() => _('none'), () => _('low'), () => _('medium'), () => _('high')];
+const MAIL_REFRESH_INTERVAL = 30 * 1000;
 const NOTIFICATION_WIDTH = 380;
 const NOTIFICATION_DURATION = 5000;
 const NOTIFICATION_LINGER = 2000;
@@ -106,6 +108,14 @@ function parseTimeOfDay(text) {
 function formatDateStamp(date) {
     const pad = n => String(n).padStart(2, '0');
     return `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}`;
+}
+
+// Open tasks from high to no priority, then done ones. The sort is stable, so
+// tasks in the same group keep the order they were added or dragged into.
+// Sorts in place and returns the list.
+function sortTodos(list) {
+    const rank = t => t.done ? TODO_PRIORITIES.length : TODO_PRIORITIES.length - 1 - (t.priority || 0);
+    return list.sort((a, b) => rank(a) - rank(b));
 }
 
 function makeButton(iconName, styleClass, accessibleName) {
@@ -231,6 +241,7 @@ class Island extends St.Widget {
             },
             'changed::todos', () => this._renderTodos(),
             'changed::show-blip-transfers', () => this._syncSendButton(),
+            'changed::show-mail-unread', () => this._syncMailButton(),
             'changed::transparent-background', () => this._updateTransparency(), this);
         Main.layoutManager.connectObject('monitors-changed',
             () => this._updateGeometry(), this);
@@ -251,6 +262,8 @@ class Island extends St.Widget {
         this._updateGeometry();
         this._syncSeekLabels();
         this._onCurrentChanged();
+        this._syncMailButton();
+        this._sortTodos();
     }
 
     _buildUi() {
@@ -679,8 +692,8 @@ class Island extends St.Widget {
         if (!text)
             return;
         const list = this._loadTodos();
-        this._insertAfterOpen(list, {id: GLib.uuid_string_random(), text, done: false, priority: 0});
-        this._saveTodos(list);
+        list.push({id: GLib.uuid_string_random(), text, done: false, priority: 0});
+        this._saveTodos(sortTodos(list));
         this._todoEntry.text = '';
     }
 
@@ -691,20 +704,21 @@ class Island extends St.Widget {
             return;
         item.done = !item.done;
         list.splice(list.indexOf(item), 1);
-        if (item.done)
-            list.push(item);
-        else
-            this._insertAfterOpen(list, item);
-        this._saveTodos(list);
+        list.push(item);
+        this._saveTodos(sortTodos(list));
     }
 
-    // Open tasks stay above done ones: insert after the last open task.
-    _insertAfterOpen(list, item) {
-        const lastOpen = list.findLastIndex(t => !t.done);
-        list.splice(lastOpen + 1, 0, item);
+    // Applies the priority order. Done while the list is closed, so a task
+    // changed by hand doesn't jump away from under the pointer.
+    _sortTodos() {
+        const list = this._loadTodos();
+        const sorted = sortTodos([...list]);
+        if (sorted.some((t, i) => t !== list[i]))
+            this._saveTodos(sorted);
     }
 
-    // Cycles none -> low -> medium -> high -> none.
+    // Cycles none -> low -> medium -> high -> none. The task keeps its place
+    // until the list is closed, so it can be cycled several times in a row.
     _cycleTodoPriority(id) {
         const list = this._loadTodos();
         const item = list.find(t => t.id === id);
@@ -1027,6 +1041,48 @@ class Island extends St.Widget {
             this._setCard(null);
     }
 
+    _syncMailButton() {
+        const enabled = this._settings.get_boolean('show-mail-unread');
+        this._mailButton.visible = enabled;
+        if (!enabled) {
+            this._clearTimeout('mail');
+            return;
+        }
+        this._refreshMail();
+        this._startInterval('mail', MAIL_REFRESH_INTERVAL, () => this._refreshMail());
+    }
+
+    async _refreshMail() {
+        const unread = await readUnread();
+        if (!this._destroyed)
+            this._setMailUnread(unread);
+    }
+
+    // null when the count is unknown (Thunderbird not set up).
+    _setMailUnread(count) {
+        const show = count !== null && count > 0;
+        this._mailCount.visible = show;
+        if (show)
+            this._mailCount.text = count > 999 ? '999+' : `${count}`;
+        this._mailIcon.icon_name = show ? 'mail-unread-symbolic' : 'mail-read-symbolic';
+        this._mailButton.accessible_name = show
+            ? _('Open Thunderbird, %d unread').format(count)
+            : _('Open Thunderbird');
+        this._updateCompactWidth();
+    }
+
+    _openMail() {
+        const app = MAIL_APP_IDS
+            .map(id => Shell.AppSystem.get_default().lookup_app(id))
+            .find(a => a);
+        this.setExpanded(false);
+        if (app)
+            app.activate();
+        else
+            Main.notify(_('Thunderbird is not installed'));
+        this._refreshMail();
+    }
+
     _buildNotification() {
         this._notificationBox = new St.BoxLayout({
             style_class: 'island-notification',
@@ -1200,6 +1256,25 @@ class Island extends St.Widget {
         this._sendButton.connect('clicked', () => this.toggleSend());
         this._compactBox.add_child(this._sendButton);
         this._syncSendButton();
+
+        this._mailIcon = new St.Icon({icon_name: 'mail-unread-symbolic', style_class: 'island-compact-mail-icon'});
+        this._mailCount = new St.Label({
+            style_class: 'island-compact-mail-count',
+            y_align: Clutter.ActorAlign.CENTER,
+            visible: false,
+        });
+        const mailContent = new St.BoxLayout({style_class: 'island-compact-mail-content'});
+        mailContent.add_child(this._mailIcon);
+        mailContent.add_child(this._mailCount);
+        this._mailButton = new St.Button({
+            style_class: 'island-button island-compact-mail',
+            child: mailContent,
+            can_focus: true,
+            y_align: Clutter.ActorAlign.CENTER,
+            accessible_name: _('Open Thunderbird'),
+        });
+        this._mailButton.connect('clicked', () => this._openMail());
+        this._compactBox.add_child(this._mailButton);
 
         this._todoButton = makeButton('view-list-bullet-symbolic', 'island-compact-todo', _('Todo list'));
         this._todoButton.y_align = Clutter.ActorAlign.CENTER;
@@ -1584,6 +1659,8 @@ class Island extends St.Widget {
         const current = this._expanded ? this._view : null;
         if (current === card)
             return;
+        if (current === 'todo')
+            this._sortTodos();
 
         this._expanded = card !== null;
         if (card !== 'calendar')
@@ -1641,6 +1718,7 @@ class Island extends St.Widget {
             this._todoRequested = false;
             return;
         }
+        this._sortTodos();
         this._setCard('todo');
         this._todoEntry.grab_key_focus();
     }

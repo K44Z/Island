@@ -130,6 +130,13 @@ export default class IslandPreferences extends ExtensionPreferences {
         settings.bind('show-blip-transfers', blip, 'active', Gio.SettingsBindFlags.DEFAULT);
         behavior.add(blip);
 
+        const mail = new Adw.SwitchRow({
+            title: _('Unread mail'),
+            subtitle: _('Show the unread count of your Thunderbird inboxes; click to open Thunderbird'),
+        });
+        settings.bind('show-mail-unread', mail, 'active', Gio.SettingsBindFlags.DEFAULT);
+        behavior.add(mail);
+
         const hover = new Adw.SwitchRow({
             title: _('Expand on hover'),
             subtitle: _('Otherwise, click the island to expand it'),

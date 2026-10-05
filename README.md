@@ -24,9 +24,17 @@ for media, the time and notifications.
   that opens, paste them with Ctrl+V (copied files, an image or text), or
   choose them. Needs Blip's desktop app to be started from its
   launcher, so its log reaches the journal.
+- **Unread mail:** a mail button in the pill shows the unread count of your
+  Thunderbird inboxes and opens Thunderbird when clicked. The count comes from
+  Thunderbird's own folder cache, so it needs no login, but it is only as
+  fresh as Thunderbird's last sync and goes stale while Thunderbird is closed.
+  Can be turned off in the preferences.
 - **Todo list:** click the list icon in the pill to add tasks, check them
   off or delete them. Click the dot next to a task to set its priority (none,
-  low, medium, high). Stored locally in the extension's settings.
+  low, medium, high). Tasks are sorted high to low, with done ones at the
+  bottom: a task changed by hand stays put until you close the list, and can be
+  dragged to reorder within the same priority. Stored
+  locally in the extension's settings.
 
 In the top bar it's always present. Placed below the top bar instead, it
 hides when there is nothing to show.
