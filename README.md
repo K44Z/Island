@@ -24,9 +24,9 @@ for media, the time and notifications.
   that opens, paste them with Ctrl+V (copied files, an image or text), or
   choose them. Needs Blip's desktop app to be started from its
   launcher, so its log reaches the journal.
-- **Unread mail:** a mail button in the pill shows the unread count of your
-  Thunderbird inboxes and opens Thunderbird when clicked. The count comes from
-  Thunderbird's own folder cache, so it needs no login, but it is only as
+- **Unread mail:** a mail button in the pill shows a red dot when any of your
+  Thunderbird inboxes has unread mail, and opens Thunderbird when clicked. It
+  reads Thunderbird's own folder cache, so it needs no login, but it is only as
   fresh as Thunderbird's last sync and goes stale while Thunderbird is closed.
   Can be turned off in the preferences.
 - **Todo list:** click the list icon in the pill to add tasks, check them

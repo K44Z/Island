@@ -50,11 +50,7 @@
 }
 
 .island-compact-mail {
-  padding: 0 6px;
-}
-
-.island-compact-mail-content {
-  spacing: 4px;
+  padding: 7px;
 }
 
 .island-compact-mail-icon {
@@ -62,10 +58,12 @@
   color: rgba(255, 255, 255, 0.85);
 }
 
-.island-compact-mail-count {
-  font-size: 9pt;
-  font-weight: bold;
-  color: #fff;
+.island-compact-mail-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background-color: #ed333b;
+  border: 1px solid #000;
 }
 
 .island-compact-send-icon {

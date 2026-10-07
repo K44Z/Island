@@ -1060,15 +1060,11 @@ class Island extends St.Widget {
 
     // null when the count is unknown (Thunderbird not set up).
     _setMailUnread(count) {
-        const show = count !== null && count > 0;
-        this._mailCount.visible = show;
-        if (show)
-            this._mailCount.text = count > 999 ? '999+' : `${count}`;
-        this._mailIcon.icon_name = show ? 'mail-unread-symbolic' : 'mail-read-symbolic';
-        this._mailButton.accessible_name = show
+        const unread = count !== null && count > 0;
+        this._mailDot.visible = unread;
+        this._mailButton.accessible_name = unread
             ? _('Open Thunderbird, %d unread').format(count)
             : _('Open Thunderbird');
-        this._updateCompactWidth();
     }
 
     _openMail() {
@@ -1257,15 +1253,22 @@ class Island extends St.Widget {
         this._compactBox.add_child(this._sendButton);
         this._syncSendButton();
 
-        this._mailIcon = new St.Icon({icon_name: 'mail-unread-symbolic', style_class: 'island-compact-mail-icon'});
-        this._mailCount = new St.Label({
-            style_class: 'island-compact-mail-count',
+        const mailContent = new St.Widget({layout_manager: new Clutter.BinLayout()});
+        mailContent.add_child(new St.Icon({
+            icon_name: 'mail-unread-symbolic',
+            style_class: 'island-compact-mail-icon',
+            x_align: Clutter.ActorAlign.CENTER,
             y_align: Clutter.ActorAlign.CENTER,
+        }));
+        this._mailDot = new St.Widget({
+            style_class: 'island-compact-mail-dot',
+            x_align: Clutter.ActorAlign.END,
+            y_align: Clutter.ActorAlign.START,
+            translation_x: 3,
+            translation_y: -3,
             visible: false,
         });
-        const mailContent = new St.BoxLayout({style_class: 'island-compact-mail-content'});
-        mailContent.add_child(this._mailIcon);
-        mailContent.add_child(this._mailCount);
+        mailContent.add_child(this._mailDot);
         this._mailButton = new St.Button({
             style_class: 'island-button island-compact-mail',
             child: mailContent,
