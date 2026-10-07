@@ -18,6 +18,7 @@ import {formatDateWithCFormatString, formatTime as formatClockTime} from 'resour
 
 import {ArtCache} from './art.js';
 import {openSender} from './blip.js';
+import {NotificationHistory} from './history.js';
 import {APP_IDS as MAIL_APP_IDS, readUnread} from './thunderbird.js';
 import {byName} from './mpris.js';
 
@@ -208,6 +209,7 @@ class Island extends St.Widget {
         this._notification = null;
         this._calendarRequested = false;
         this._todoRequested = false;
+        this._historyRequested = false;
         this._sendRequested = false;
         this._dragging = false;
         this._pausedLongEnough = false;
@@ -281,6 +283,7 @@ class Island extends St.Widget {
         this._buildNotification();
         this._buildCalendar();
         this._buildTodo();
+        this._buildHistory();
         this._renderTodos();
         this._buildSend();
         this._renderDevices();
@@ -672,6 +675,16 @@ class Island extends St.Widget {
             orientation: Clutter.Orientation.VERTICAL,
         });
         this._todoBox.add_child(this._todoList);
+    }
+
+    _buildHistory() {
+        this._historyBox = new NotificationHistory();
+        this._clip.add_child(this._historyBox);
+        this._historyBox.connect('changed', () => {
+            if (this._view === 'history')
+                this._resize(true);
+        });
+        this._historyBox.connect('close-requested', () => this._setCard(null));
     }
 
     _loadTodos() {
@@ -1279,6 +1292,12 @@ class Island extends St.Widget {
         this._mailButton.connect('clicked', () => this._openMail());
         this._compactBox.add_child(this._mailButton);
 
+        this._historyButton = makeButton('preferences-system-notifications-symbolic',
+            'island-compact-history', _('Notification history'));
+        this._historyButton.y_align = Clutter.ActorAlign.CENTER;
+        this._historyButton.connect('clicked', () => this.toggleHistory());
+        this._compactBox.add_child(this._historyButton);
+
         this._todoButton = makeButton('view-list-bullet-symbolic', 'island-compact-todo', _('Todo list'));
         this._todoButton.y_align = Clutter.ActorAlign.CENTER;
         this._todoButton.connect('clicked', () => this.toggleTodo());
@@ -1434,6 +1453,7 @@ class Island extends St.Widget {
         this._expandedBox.width = this._expandedWidth;
         this._notificationBox.width = this._notificationWidth;
         this._todoBox.width = this._notificationWidth;
+        this._historyBox.width = this._notificationWidth;
         this._sendBox.width = this._notificationWidth;
         this._resize(false);
         this._reposition();
@@ -1459,6 +1479,10 @@ class Island extends St.Widget {
         }
         if (this._view === 'todo') {
             const [, height] = this._todoBox.get_preferred_height(this._notificationWidth);
+            return [this._notificationWidth, height];
+        }
+        if (this._view === 'history') {
+            const [, height] = this._historyBox.get_preferred_height(this._notificationWidth);
             return [this._notificationWidth, height];
         }
         if (this._view === 'send') {
@@ -1626,6 +1650,7 @@ class Island extends St.Widget {
             notification: this._notificationBox,
             calendar: this._calendarBox,
             todo: this._todoBox,
+            history: this._historyBox,
             send: this._sendBox,
         };
         const incoming = actors[view];
@@ -1681,9 +1706,10 @@ class Island extends St.Widget {
         }
 
         this._grabHelper.ungrab({actor: this});
-        if (this._calendarRequested || this._todoRequested || this._sendRequested) {
+        if (this._calendarRequested || this._todoRequested || this._historyRequested || this._sendRequested) {
             this._calendarRequested = false;
             this._todoRequested = false;
+            this._historyRequested = false;
             this._sendRequested = false;
             this._updateVisibility();
         }
@@ -1733,6 +1759,29 @@ class Island extends St.Widget {
         }
         this.showTodo();
         if (this._view === 'todo' && !this.hover)
+            this._startTimeout('collapse', CALENDAR_AUTO_COLLAPSE_DELAY, () => this._setCard(null));
+    }
+
+    showHistory() {
+        if (this._notification)
+            this._endNotification();
+        this._historyRequested = true;
+        this._updateVisibility();
+        if (!this._shown || this._suppressed) {
+            this._historyRequested = false;
+            return;
+        }
+        this._historyBox.refresh();
+        this._setCard('history');
+    }
+
+    toggleHistory() {
+        if (this._expanded && this._view === 'history') {
+            this._setCard(null);
+            return;
+        }
+        this.showHistory();
+        if (this._view === 'history' && !this.hover)
             this._startTimeout('collapse', CALENDAR_AUTO_COLLAPSE_DELAY, () => this._setCard(null));
     }
 
@@ -1995,7 +2044,7 @@ class Island extends St.Widget {
         if (this._shown && !this._notification && hadMedia !== wanted && wanted)
             this._compact.set({visible: true, opacity: 255});
 
-        if (wanted || this._notification || this._calendarRequested || this._todoRequested || this._sendRequested || this._topBar)
+        if (wanted || this._notification || this._calendarRequested || this._todoRequested || this._historyRequested || this._sendRequested || this._topBar)
             this._show();
         else
             this._hide();
@@ -2032,14 +2081,16 @@ class Island extends St.Widget {
         this._notificationBox.remove_all_transitions();
         this._calendarBox.remove_all_transitions();
         this._todoBox.remove_all_transitions();
+        this._historyBox.remove_all_transitions();
         this._sendBox.remove_all_transitions();
         const startInCompact = !this._notification && !this._calendarRequested && !this._todoRequested &&
-            !this._sendRequested;
+            !this._historyRequested && !this._sendRequested;
         this._compact.set({visible: true, opacity: startInCompact ? 255 : 0});
         this._expandedBox.set({visible: false, opacity: 0});
         this._notificationBox.set({visible: false, opacity: 0});
         this._calendarBox.set({visible: false, opacity: 0});
         this._todoBox.set({visible: false, opacity: 0});
+        this._historyBox.set({visible: false, opacity: 0});
         this._sendBox.set({visible: false, opacity: 0});
         this._resize(false);
         this._reposition();

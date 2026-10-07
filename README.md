@@ -29,6 +29,9 @@ for media, the time and notifications.
   reads Thunderbird's own folder cache, so it needs no login, but it is only as
   fresh as Thunderbird's last sync and goes stale while Thunderbird is closed.
   Can be turned off in the preferences.
+- **Notification history:** click the bell in the pill to see your recent
+  notifications, newest first, like GNOME's notification list. Click one to
+  open it, dismiss it with the cross, or clear them all.
 - **Todo list:** click the list icon in the pill to add tasks, check them
   off or delete them. Click the dot next to a task to set its priority (none,
   low, medium, high). Tasks are sorted high to low, with done ones at the

@@ -49,6 +49,11 @@
   color: rgba(255, 255, 255, 0.85);
 }
 
+.island-compact-history-icon {
+  icon-size: 15px;
+  color: rgba(255, 255, 255, 0.85);
+}
+
 .island-compact-mail {
   padding: 7px;
 }
@@ -600,6 +605,93 @@
 
 .island-todo-remove-icon {
   icon-size: 14px;
+}
+
+.island-history {
+  padding: 12px 14px 14px;
+  spacing: 8px;
+}
+
+.island-history-scroll {
+  max-height: 380px;
+}
+
+.island-history-list {
+  spacing: 4px;
+}
+
+.island-history-clear {
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 9.5pt;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.7);
+  transition-duration: 150ms;
+}
+
+.island-history-clear:hover {
+  background-color: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+.island-history-item {
+  spacing: 2px;
+}
+
+.island-history-main {
+  border-radius: 12px;
+  padding: 6px 8px;
+}
+
+.island-history-main:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+.island-history-row {
+  spacing: 10px;
+}
+
+.island-history-icon {
+  icon-size: 28px;
+}
+
+.island-history-text {
+  spacing: 1px;
+}
+
+.island-history-meta {
+  spacing: 8px;
+}
+
+.island-history-sender {
+  font-size: 8.5pt;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.island-history-age {
+  font-size: 8.5pt;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.island-history-title {
+  font-size: 10pt;
+  font-weight: bold;
+  color: #fff;
+}
+
+.island-history-body {
+  font-size: 9.5pt;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.island-history-dismiss {
+  padding: 4px;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.island-history-dismiss-icon {
+  icon-size: 12px;
 }
 
 .island-send {
