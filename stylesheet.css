@@ -2,7 +2,6 @@
   background-color: #000;
   color: #fff;
   border: 1px solid rgba(255, 255, 255, 0.07);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
 }
 
 .island.island-transparent {
@@ -52,6 +51,14 @@
 .island-compact-history-icon {
   icon-size: 15px;
   color: rgba(255, 255, 255, 0.85);
+}
+
+.island-compact-history-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background-color: #ed333b;
+  border: 1px solid #000;
 }
 
 .island-compact-send-icon {

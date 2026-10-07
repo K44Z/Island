@@ -681,6 +681,8 @@ class Island extends St.Widget {
                 this._resize(true);
         });
         this._historyBox.connect('close-requested', () => this._setCard(null));
+        this._historyBox.connect('unread-changed', () => this._syncHistoryDot());
+        this._syncHistoryDot();
     }
 
     _loadTodos() {
@@ -1228,6 +1230,20 @@ class Island extends St.Widget {
             'island-compact-history', _('Notification history'));
         this._historyButton.y_align = Clutter.ActorAlign.CENTER;
         this._historyButton.connect('clicked', () => this.toggleHistory());
+        this._historyDot = new St.Widget({
+            style_class: 'island-compact-history-dot',
+            x_align: Clutter.ActorAlign.END,
+            y_align: Clutter.ActorAlign.START,
+            translation_x: 3,
+            translation_y: -3,
+            visible: false,
+        });
+        const historyContent = new St.Widget({layout_manager: new Clutter.BinLayout()});
+        const bell = this._historyButton.child;
+        this._historyButton.set_child(null);
+        historyContent.add_child(bell);
+        historyContent.add_child(this._historyDot);
+        this._historyButton.set_child(historyContent);
         this._compactBox.add_child(this._historyButton);
 
         this._todoButton = makeButton('view-list-bullet-symbolic', 'island-compact-todo', _('Todo list'));
@@ -1705,6 +1721,14 @@ class Island extends St.Widget {
         }
         this._historyBox.refresh();
         this._setCard('history');
+    }
+
+    _syncHistoryDot() {
+        const unread = this._historyBox.unread;
+        this._historyDot.visible = unread;
+        this._historyButton.accessible_name = unread
+            ? _('Notification history, unread notifications')
+            : _('Notification history');
     }
 
     toggleHistory() {

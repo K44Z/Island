@@ -60,6 +60,8 @@ export const NotificationHistory = GObject.registerClass({
         'changed': {},
         // An item was opened, so the card should close.
         'close-requested': {},
+        // `unread` flipped.
+        'unread-changed': {},
     },
 }, class NotificationHistory extends St.BoxLayout {
     constructor() {
@@ -104,6 +106,9 @@ export const NotificationHistory = GObject.registerClass({
         this.add_child(this._scroll);
 
         this._rebuildId = 0;
+        // Notifications the user has had the card open for.
+        this._seen = new WeakSet();
+        this.unread = false;
         const tray = Main.messageTray;
         tray.connectObject(
             'source-added', (_tray, source) => {
@@ -126,6 +131,7 @@ export const NotificationHistory = GObject.registerClass({
     // Brings the list up to date, e.g. so the ages are right when it opens.
     refresh() {
         this._scroll.vadjustment.value = 0;
+        this._notifications().forEach(n => this._seen.add(n));
         this._rebuild();
     }
 
@@ -156,6 +162,15 @@ export const NotificationHistory = GObject.registerClass({
     _rebuild() {
         this._list.destroy_all_children();
         const notifications = this._notifications();
+
+        // Anything listed while the card is on screen counts as read.
+        if (this.mapped)
+            notifications.forEach(n => this._seen.add(n));
+        const unread = notifications.some(n => !this._seen.has(n));
+        if (unread !== this.unread) {
+            this.unread = unread;
+            this.emit('unread-changed');
+        }
 
         for (const notification of notifications)
             this._list.add_child(this._buildItem(notification));
