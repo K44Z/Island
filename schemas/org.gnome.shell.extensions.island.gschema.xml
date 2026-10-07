@@ -24,10 +24,6 @@
       <default>true</default>
       <summary>Announce incoming Blip file transfers in the island</summary>
     </key>
-    <key name="show-mail-unread" type="b">
-      <default>true</default>
-      <summary>Show a button with the unread mail count that opens Thunderbird</summary>
-    </key>
     <key name="expand-on-hover" type="b">
       <default>true</default>
       <summary>Expand when the pointer hovers the island (otherwise expand on click)</summary>

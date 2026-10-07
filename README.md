@@ -24,11 +24,6 @@ for media, the time and notifications.
   that opens, paste them with Ctrl+V (copied files, an image or text), or
   choose them. Needs Blip's desktop app to be started from its
   launcher, so its log reaches the journal.
-- **Unread mail:** a mail button in the pill shows a red dot when any of your
-  Thunderbird inboxes has unread mail, and opens Thunderbird when clicked. It
-  reads Thunderbird's own folder cache, so it needs no login, but it is only as
-  fresh as Thunderbird's last sync and goes stale while Thunderbird is closed.
-  Can be turned off in the preferences.
 - **Notification history:** click the bell in the pill to see your recent
   notifications, newest first, like GNOME's notification list. Click one to
   open it, dismiss it with the cross, or clear them all.

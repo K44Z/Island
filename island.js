@@ -19,7 +19,6 @@ import {formatDateWithCFormatString, formatTime as formatClockTime} from 'resour
 import {ArtCache} from './art.js';
 import {openSender} from './blip.js';
 import {NotificationHistory} from './history.js';
-import {APP_IDS as MAIL_APP_IDS, readUnread} from './thunderbird.js';
 import {byName} from './mpris.js';
 
 
@@ -46,7 +45,6 @@ const PAUSED_HIDE_DELAY = 8000;
 const GONE_HIDE_DELAY = 1500;
 
 const TODO_PRIORITIES = [() => _('none'), () => _('low'), () => _('medium'), () => _('high')];
-const MAIL_REFRESH_INTERVAL = 30 * 1000;
 const NOTIFICATION_WIDTH = 380;
 const NOTIFICATION_DURATION = 5000;
 const NOTIFICATION_LINGER = 2000;
@@ -243,7 +241,6 @@ class Island extends St.Widget {
             },
             'changed::todos', () => this._renderTodos(),
             'changed::show-blip-transfers', () => this._syncSendButton(),
-            'changed::show-mail-unread', () => this._syncMailButton(),
             'changed::transparent-background', () => this._updateTransparency(), this);
         Main.layoutManager.connectObject('monitors-changed',
             () => this._updateGeometry(), this);
@@ -264,7 +261,6 @@ class Island extends St.Widget {
         this._updateGeometry();
         this._syncSeekLabels();
         this._onCurrentChanged();
-        this._syncMailButton();
         this._sortTodos();
     }
 
@@ -1054,44 +1050,6 @@ class Island extends St.Widget {
             this._setCard(null);
     }
 
-    _syncMailButton() {
-        const enabled = this._settings.get_boolean('show-mail-unread');
-        this._mailButton.visible = enabled;
-        if (!enabled) {
-            this._clearTimeout('mail');
-            return;
-        }
-        this._refreshMail();
-        this._startInterval('mail', MAIL_REFRESH_INTERVAL, () => this._refreshMail());
-    }
-
-    async _refreshMail() {
-        const unread = await readUnread();
-        if (!this._destroyed)
-            this._setMailUnread(unread);
-    }
-
-    // null when the count is unknown (Thunderbird not set up).
-    _setMailUnread(count) {
-        const unread = count !== null && count > 0;
-        this._mailDot.visible = unread;
-        this._mailButton.accessible_name = unread
-            ? _('Open Thunderbird, %d unread').format(count)
-            : _('Open Thunderbird');
-    }
-
-    _openMail() {
-        const app = MAIL_APP_IDS
-            .map(id => Shell.AppSystem.get_default().lookup_app(id))
-            .find(a => a);
-        this.setExpanded(false);
-        if (app)
-            app.activate();
-        else
-            Main.notify(_('Thunderbird is not installed'));
-        this._refreshMail();
-    }
-
     _buildNotification() {
         this._notificationBox = new St.BoxLayout({
             style_class: 'island-notification',
@@ -1265,32 +1223,6 @@ class Island extends St.Widget {
         this._sendButton.connect('clicked', () => this.toggleSend());
         this._compactBox.add_child(this._sendButton);
         this._syncSendButton();
-
-        const mailContent = new St.Widget({layout_manager: new Clutter.BinLayout()});
-        mailContent.add_child(new St.Icon({
-            icon_name: 'mail-unread-symbolic',
-            style_class: 'island-compact-mail-icon',
-            x_align: Clutter.ActorAlign.CENTER,
-            y_align: Clutter.ActorAlign.CENTER,
-        }));
-        this._mailDot = new St.Widget({
-            style_class: 'island-compact-mail-dot',
-            x_align: Clutter.ActorAlign.END,
-            y_align: Clutter.ActorAlign.START,
-            translation_x: 3,
-            translation_y: -3,
-            visible: false,
-        });
-        mailContent.add_child(this._mailDot);
-        this._mailButton = new St.Button({
-            style_class: 'island-button island-compact-mail',
-            child: mailContent,
-            can_focus: true,
-            y_align: Clutter.ActorAlign.CENTER,
-            accessible_name: _('Open Thunderbird'),
-        });
-        this._mailButton.connect('clicked', () => this._openMail());
-        this._compactBox.add_child(this._mailButton);
 
         this._historyButton = makeButton('preferences-system-notifications-symbolic',
             'island-compact-history', _('Notification history'));

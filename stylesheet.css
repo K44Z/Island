@@ -54,23 +54,6 @@
   color: rgba(255, 255, 255, 0.85);
 }
 
-.island-compact-mail {
-  padding: 7px;
-}
-
-.island-compact-mail-icon {
-  icon-size: 15px;
-  color: rgba(255, 255, 255, 0.85);
-}
-
-.island-compact-mail-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 999px;
-  background-color: #ed333b;
-  border: 1px solid #000;
-}
-
 .island-compact-send-icon {
   icon-size: 15px;
   color: rgba(255, 255, 255, 0.85);
