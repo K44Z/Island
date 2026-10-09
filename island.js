@@ -1868,6 +1868,8 @@ class Island extends St.Widget {
             }
         }
         this._endNotification();
+        // Dismissed means gone, so it also leaves the history.
+        notification?.destroy(MessageTray.NotificationDestroyedReason.DISMISSED);
     }
 
     _activateNotification() {
