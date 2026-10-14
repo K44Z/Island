@@ -610,6 +610,21 @@
   spacing: 4px;
 }
 
+.island-history-empty {
+  padding: 22px 0 18px;
+  spacing: 8px;
+}
+
+.island-history-empty-icon {
+  icon-size: 22px;
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.island-history-empty-label {
+  font-size: 10pt;
+  color: rgba(255, 255, 255, 0.5);
+}
+
 .island-history-clear {
   border-radius: 999px;
   padding: 3px 10px;

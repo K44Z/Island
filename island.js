@@ -241,7 +241,8 @@ class Island extends St.Widget {
             },
             'changed::todos', () => this._renderTodos(),
             'changed::show-blip-transfers', () => this._syncSendButton(),
-            'changed::transparent-background', () => this._updateTransparency(), this);
+            'changed::transparent-background', () => this._updateTransparency(),
+            'changed::background-opacity', () => this._updateTransparency(), this);
         Main.layoutManager.connectObject('monitors-changed',
             () => this._updateGeometry(), this);
         Main.panel.connectObject('notify::height',
@@ -287,9 +288,11 @@ class Island extends St.Widget {
     }
 
     _updateTransparency() {
-        this.set_style_class_name(this._settings.get_boolean('transparent-background')
-            ? 'island island-transparent'
-            : 'island');
+        const transparent = this._settings.get_boolean('transparent-background');
+        this.set_style_class_name(transparent ? 'island island-transparent' : 'island');
+        const alpha = this._settings.get_int('background-opacity') / 100;
+        this._backgroundStyle = transparent ? `background-color: rgba(0, 0, 0, ${alpha});` : '';
+        this._updateRadius();
     }
 
     _buildCalendar() {
@@ -602,6 +605,8 @@ class Island extends St.Widget {
             const summary = new St.Label({
                 style_class: 'island-event-summary',
                 text: event.summary ?? '',
+                // Long summaries must not widen the calendar view; ellipsize instead.
+                natural_width: 0,
             });
             summary.clutter_text.ellipsize = Pango.EllipsizeMode.END;
             text.add_child(summary);
@@ -1581,7 +1586,7 @@ class Island extends St.Widget {
 
     _updateRadius() {
         const radius = Math.min(this.height / 2, this._maxRadius ?? EXPANDED_RADIUS);
-        this.set_style(`border-radius: ${Math.round(radius)}px;`);
+        this.set_style(`border-radius: ${Math.round(radius)}px;${this._backgroundStyle ?? ''}`);
     }
 
     get expanded() {

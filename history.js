@@ -176,10 +176,22 @@ export const NotificationHistory = GObject.registerClass({
             this._list.add_child(this._buildItem(notification));
 
         if (notifications.length === 0) {
-            this._list.add_child(new St.Label({
-                style_class: 'island-event-empty',
-                text: _('No notifications'),
+            const empty = new St.BoxLayout({
+                style_class: 'island-history-empty',
+                orientation: Clutter.Orientation.VERTICAL,
+                x_align: Clutter.ActorAlign.CENTER,
+            });
+            empty.add_child(new St.Icon({
+                style_class: 'island-history-empty-icon',
+                icon_name: 'object-select-symbolic',
+                x_align: Clutter.ActorAlign.CENTER,
             }));
+            empty.add_child(new St.Label({
+                style_class: 'island-history-empty-label',
+                text: _("You're all caught up"),
+                x_align: Clutter.ActorAlign.CENTER,
+            }));
+            this._list.add_child(empty);
         }
         this._clear.visible = notifications.length > 0;
         this.emit('changed');

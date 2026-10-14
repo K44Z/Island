@@ -151,6 +151,15 @@ export default class IslandPreferences extends ExtensionPreferences {
         settings.bind('transparent-background', transparent, 'active', Gio.SettingsBindFlags.DEFAULT);
         behavior.add(transparent);
 
+        const opacity = new Adw.SpinRow({
+            title: _('Background opacity'),
+            subtitle: _('Percent; 0 is fully transparent'),
+            adjustment: new Gtk.Adjustment({lower: 0, upper: 100, step_increment: 5, page_increment: 10}),
+        });
+        settings.bind('background-opacity', opacity, 'value', Gio.SettingsBindFlags.DEFAULT);
+        settings.bind('transparent-background', opacity, 'sensitive', Gio.SettingsBindFlags.GET);
+        behavior.add(opacity);
+
         const seek = new Adw.SpinRow({
             title: _('Seek step'),
             subtitle: _('Seconds to skip backward or forward'),

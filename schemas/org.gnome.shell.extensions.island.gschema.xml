@@ -36,6 +36,11 @@
       <default>false</default>
       <summary>Use a translucent background instead of solid black</summary>
     </key>
+    <key name="background-opacity" type="i">
+      <range min="0" max="100"/>
+      <default>28</default>
+      <summary>Background opacity, in percent, when the background is translucent</summary>
+    </key>
     <key name="todos" type="s">
       <default>'[]'</default>
       <summary>Todo items, as a JSON array of {id, text, done, priority}</summary>
