@@ -9,6 +9,11 @@
   border-color: rgba(255, 255, 255, 0.14);
 }
 
+.island.island-blurred {
+  background-color: transparent;
+  border-color: rgba(255, 255, 255, 0.06);
+}
+
 .island-compact {
   padding: 0 10px 0 6px;
   border-radius: 999px;

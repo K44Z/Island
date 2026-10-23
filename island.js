@@ -31,6 +31,10 @@ const EXPANDED_WIDTH = 400;
 const EXPANDED_RADIUS = 28;
 const PANEL_GAP = 6;
 
+const BLUR_MY_SHELL_UUID = 'blur-my-shell@aunetx';
+// Blur my Shell's dark popup surface tint, drawn over its blur.
+const BLUR_TINT = 'background-color: rgba(30, 30, 33, 0.5);';
+
 const EXPAND_DURATION = 420;
 const SETTLE_OVERSHOOT = 0.04;
 const COLLAPSE_DURATION = 320;
@@ -242,7 +246,12 @@ class Island extends St.Widget {
             'changed::todos', () => this._renderTodos(),
             'changed::show-blip-transfers', () => this._syncSendButton(),
             'changed::transparent-background', () => this._updateTransparency(),
-            'changed::background-opacity', () => this._updateTransparency(), this);
+            'changed::background-opacity', () => this._updateTransparency(),
+            'changed::blur-background', () => this._updateTransparency(), this);
+        Main.extensionManager.connectObject('extension-state-changed', (_m, extension) => {
+            if (extension.uuid === BLUR_MY_SHELL_UUID)
+                this._updateTransparency();
+        }, this);
         Main.layoutManager.connectObject('monitors-changed',
             () => this._updateGeometry(), this);
         Main.panel.connectObject('notify::height',
@@ -288,10 +297,38 @@ class Island extends St.Widget {
     }
 
     _updateTransparency() {
+        const bms = this._settings.get_boolean('blur-background') ? global.blur_my_shell ?? null : null;
         const transparent = this._settings.get_boolean('transparent-background');
-        this.set_style_class_name(transparent ? 'island island-transparent' : 'island');
+        this.set_style_class_name(bms ? 'island island-blurred'
+            : transparent ? 'island island-transparent' : 'island');
         const alpha = this._settings.get_int('background-opacity') / 100;
-        this._backgroundStyle = transparent ? `background-color: rgba(0, 0, 0, ${alpha});` : '';
+        this._backgroundStyle = transparent && !bms ? `background-color: rgba(0, 0, 0, ${alpha});` : '';
+        this._syncBlur(bms).catch(logError);
+        this._updateRadius();
+    }
+
+    // shortcut: drives Blur my Shell's internal DynamicPipeline, may need updating when it changes.
+    async _syncBlur(bms) {
+        if (this._blurOwner === bms)
+            return;
+        try {
+            this._blur?.destroy();
+        } catch (e) {
+            // Blur my Shell may already have torn its effects down while disabling.
+            logError(e);
+        }
+        this._blur = null;
+        this._blurOwner = bms;
+        if (!bms)
+            return;
+
+        const dir = Main.extensionManager.lookup(BLUR_MY_SHELL_UUID).dir;
+        const {DynamicPipeline} = await import(dir.get_child('render/dynamic_surface.js').get_uri());
+        if (this._destroyed || this._blurOwner !== bms)
+            return;
+        this._blur = new DynamicPipeline(bms._effects_manager, bms._pipelines_manager,
+            bms._settings.popup.PIPELINE, {corner_radius: 0});
+        this._blur.attach_to_container(this, 'island-blur');
         this._updateRadius();
     }
 
@@ -1585,8 +1622,12 @@ class Island extends St.Widget {
     }
 
     _updateRadius() {
-        const radius = Math.min(this.height / 2, this._maxRadius ?? EXPANDED_RADIUS);
-        this.set_style(`border-radius: ${Math.round(radius)}px;${this._backgroundStyle ?? ''}`);
+        const radius = Math.round(Math.min(this.height / 2, this._maxRadius ?? EXPANDED_RADIUS));
+        this.set_style(`border-radius: ${radius}px;${this._backgroundStyle ?? ''}`);
+        // The tint sits on the content so it paints over the blur, not under it.
+        this._clip.set_style(this._blurOwner ? `border-radius: ${radius}px;${BLUR_TINT}` : null);
+        // Blur my Shell scales the radius itself.
+        this._blur?.set_corner_radius(radius / St.ThemeContext.get_for_stage(global.stage).scale_factor);
     }
 
     get expanded() {

@@ -160,6 +160,13 @@ export default class IslandPreferences extends ExtensionPreferences {
         settings.bind('transparent-background', opacity, 'sensitive', Gio.SettingsBindFlags.GET);
         behavior.add(opacity);
 
+        const blur = new Adw.SwitchRow({
+            title: _('Blur like GNOME menus'),
+            subtitle: _('Match the quick settings and calendar; needs Blur my Shell'),
+        });
+        settings.bind('blur-background', blur, 'active', Gio.SettingsBindFlags.DEFAULT);
+        behavior.add(blur);
+
         const seek = new Adw.SpinRow({
             title: _('Seek step'),
             subtitle: _('Seconds to skip backward or forward'),

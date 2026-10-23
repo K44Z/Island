@@ -41,6 +41,11 @@
       <default>28</default>
       <summary>Background opacity, in percent, when the background is translucent</summary>
     </key>
+    <key name="blur-background" type="b">
+      <default>false</default>
+      <summary>Blur the background like GNOME's menus</summary>
+      <description>Reuses Blur my Shell's popup blur so the island matches the quick settings and calendar. Has no effect when Blur my Shell is not enabled.</description>
+    </key>
     <key name="todos" type="s">
       <default>'[]'</default>
       <summary>Todo items, as a JSON array of {id, text, done, priority}</summary>
