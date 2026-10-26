@@ -4,6 +4,10 @@
     <value nick="below-top-bar" value="0"/>
     <value nick="top-bar" value="1"/>
   </enum>
+  <enum id="org.gnome.shell.extensions.island.animation-style">
+    <value nick="spring" value="0"/>
+    <value nick="gnome" value="1"/>
+  </enum>
 
   <schema id="org.gnome.shell.extensions.island" path="/org/gnome/shell/extensions/island/">
     <key name="seek-step" type="i">
@@ -15,6 +19,11 @@
       <default>'below-top-bar'</default>
       <summary>Where the island sits</summary>
       <description>below-top-bar floats just under the top bar and only appears when there is something to show; top-bar sits inside the top bar and always replaces the clock.</description>
+    </key>
+    <key name="animation-style" enum="org.gnome.shell.extensions.island.animation-style">
+      <default>'spring'</default>
+      <summary>How the island animates</summary>
+      <description>spring grows with a slight bounce; gnome uses the quick, plain fade and scale of GNOME's menus and quick settings.</description>
     </key>
     <key name="show-notifications" type="b">
       <default>true</default>

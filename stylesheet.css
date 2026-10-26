@@ -341,6 +341,10 @@
   background-color: transparent;
 }
 
+.island-calendar .calendar .calendar-day {
+  margin: 2px 4px;
+}
+
 .island-calendar .calendar .calendar-day:hover,
 .island-calendar .calendar .calendar-month-header .calendar-month-label:hover,
 .island-calendar .calendar .calendar-month-header .pager-button:hover {

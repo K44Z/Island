@@ -36,8 +36,11 @@ const BLUR_MY_SHELL_UUID = 'blur-my-shell@aunetx';
 const BLUR_TINT = 'background-color: rgba(30, 30, 33, 0.5);';
 
 const EXPAND_DURATION = 420;
-const SETTLE_OVERSHOOT = 0.04;
+const SETTLE_OVERSHOOT = 0.02;
+const CALENDAR_OVERSHOOT = 0.008;
 const COLLAPSE_DURATION = 320;
+const GNOME_DURATION = 150;
+const GNOME_SCALE = 0.96;
 const HOVER_EXPAND_DELAY = 120;
 const HOVER_COLLAPSE_DELAY = 350;
 
@@ -52,6 +55,7 @@ const TODO_PRIORITIES = [() => _('none'), () => _('low'), () => _('medium'), () 
 const NOTIFICATION_WIDTH = 380;
 const NOTIFICATION_DURATION = 5000;
 const NOTIFICATION_LINGER = 2000;
+const CRITICAL_NOTIFICATION_FACTOR = 3;
 const NOTIFICATION_BODY_MAX = 140;
 const NOTIFICATION_MAX_ACTIONS = 3;
 
@@ -1502,8 +1506,19 @@ class Island extends St.Widget {
         const done = () => {
             this._resizing = false;
         };
+        if (this._gnomeAnimations) {
+            this.ease({
+                width,
+                height,
+                duration: GNOME_DURATION,
+                mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+                onStopped: done,
+            });
+            return;
+        }
         if (this._view !== 'compact') {
-            this._easeSettle({width, height}, EXPAND_DURATION, done);
+            const overshoot = this._view === 'calendar' ? CALENDAR_OVERSHOOT : SETTLE_OVERSHOOT;
+            this._easeSettle({width, height}, EXPAND_DURATION, done, overshoot);
             return;
         }
         this.ease({
@@ -1515,10 +1530,10 @@ class Island extends St.Widget {
         });
     }
 
-    _easeSettle(target, duration, onDone) {
+    _easeSettle(target, duration, onDone, factor = SETTLE_OVERSHOOT) {
         const overshoot = {};
         for (const [key, value] of Object.entries(target))
-            overshoot[key] = value + (value - this[key]) * SETTLE_OVERSHOOT;
+            overshoot[key] = value + (value - this[key]) * factor;
 
         this.ease({
             ...overshoot,
@@ -1630,6 +1645,10 @@ class Island extends St.Widget {
         this._blur?.set_corner_radius(radius / St.ThemeContext.get_for_stage(global.stage).scale_factor);
     }
 
+    get _gnomeAnimations() {
+        return this._settings.get_string('animation-style') === 'gnome';
+    }
+
     get expanded() {
         return this._expanded;
     }
@@ -1652,16 +1671,17 @@ class Island extends St.Widget {
         const growing = view !== 'compact';
         this._view = view;
 
+        const gnome = this._gnomeAnimations;
         incoming.show();
         incoming.ease({
             opacity: 255,
-            duration: growing ? 260 : 200,
-            delay: growing ? 60 : 80,
+            duration: gnome ? GNOME_DURATION : growing ? 260 : 200,
+            delay: gnome ? 0 : growing ? 60 : 80,
             mode: Clutter.AnimationMode.EASE_OUT_QUAD,
         });
         outgoing.ease({
             opacity: 0,
-            duration: 120,
+            duration: gnome ? GNOME_DURATION / 2 : 120,
             mode: Clutter.AnimationMode.EASE_OUT_QUAD,
             onComplete: () => outgoing.hide(),
         });
@@ -1819,7 +1839,7 @@ class Island extends St.Widget {
 
     canShowNotifications() {
         return this._settings.get_boolean('show-notifications') &&
-            !this._suppressed && !!Main.layoutManager.primaryMonitor;
+            !!Main.layoutManager.primaryMonitor;
     }
 
     displayNotification(notification) {
@@ -1895,9 +1915,12 @@ class Island extends St.Widget {
     _scheduleNotificationEnd(delay) {
         this._clearTimeout('notification');
         const notification = this._notification;
-        if (!notification || this.hover ||
-            notification.urgency === MessageTray.Urgency.CRITICAL)
+        // A resize under a still pointer can leave hover stuck on, which would keep the notification forever.
+        this.sync_hover();
+        if (!notification || this.hover)
             return;
+        if (notification.urgency === MessageTray.Urgency.CRITICAL)
+            delay *= CRITICAL_NOTIFICATION_FACTOR;
         this._startTimeout('notification', delay, () => this._endNotification());
     }
 
@@ -2052,7 +2075,8 @@ class Island extends St.Widget {
             this._show();
         else
             this._hide();
-        this._setSuppressed(fullscreen);
+        // A notification lifts the fullscreen hiding until it ends.
+        this._setSuppressed(fullscreen && !this._notification);
     }
 
     _setSuppressed(suppressed) {
@@ -2104,13 +2128,24 @@ class Island extends St.Widget {
             this.set({visible: false, opacity: 255, scale_x: 1, scale_y: 1});
         } else {
             this.show();
-            this.set({scale_x: 0.5, scale_y: 0.5});
-            this.ease({
-                opacity: 255,
-                duration: 220,
-                mode: Clutter.AnimationMode.EASE_OUT_QUAD,
-            });
-            this._easeSettle({scale_x: 1, scale_y: 1}, 380);
+            if (this._gnomeAnimations) {
+                this.set({scale_x: GNOME_SCALE, scale_y: GNOME_SCALE});
+                this.ease({
+                    opacity: 255,
+                    scale_x: 1,
+                    scale_y: 1,
+                    duration: GNOME_DURATION,
+                    mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+                });
+            } else {
+                this.set({scale_x: 0.5, scale_y: 0.5});
+                this.ease({
+                    opacity: 255,
+                    duration: 220,
+                    mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+                });
+                this._easeSettle({scale_x: 1, scale_y: 1}, 380);
+            }
         }
         this._updateClock(true);
         this._syncTimers();
@@ -2124,12 +2159,13 @@ class Island extends St.Widget {
         this._clearTimeout('collapse');
         this._grabHelper.ungrab({actor: this});
 
+        const gnome = this._gnomeAnimations;
         this.ease({
             opacity: 0,
-            scale_x: 0.5,
-            scale_y: 0.5,
-            duration: 220,
-            mode: Clutter.AnimationMode.EASE_IN_QUAD,
+            scale_x: gnome ? GNOME_SCALE : 0.5,
+            scale_y: gnome ? GNOME_SCALE : 0.5,
+            duration: gnome ? GNOME_DURATION : 220,
+            mode: gnome ? Clutter.AnimationMode.EASE_OUT_QUAD : Clutter.AnimationMode.EASE_IN_QUAD,
             onComplete: () => this.hide(),
         });
         this._updateClock(true);
@@ -2266,6 +2302,8 @@ class Island extends St.Widget {
     }
 
     _pulse() {
+        if (this._gnomeAnimations)
+            return;
         this.ease({
             scale_x: 1.03,
             scale_y: 1.03,

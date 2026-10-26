@@ -7,6 +7,7 @@ import Gtk from 'gi://Gtk';
 import {ExtensionPreferences, gettext as _} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 
 const PLACEMENTS = ['below-top-bar', 'top-bar'];
+const ANIMATION_STYLES = ['spring', 'gnome'];
 
 const SHORTCUTS = [
     ['toggle-island', () => _('Expand or collapse')],
@@ -115,6 +116,16 @@ export default class IslandPreferences extends ExtensionPreferences {
         placement.connect('notify::selected', () =>
             settings.set_string('placement', PLACEMENTS[placement.selected]));
         behavior.add(placement);
+
+        const animation = new Adw.ComboRow({
+            title: _('Animation style'),
+            subtitle: _('GNOME matches the quick settings and calendar menus'),
+            model: Gtk.StringList.new([_('Spring'), _('GNOME')]),
+        });
+        animation.selected = Math.max(0, ANIMATION_STYLES.indexOf(settings.get_string('animation-style')));
+        animation.connect('notify::selected', () =>
+            settings.set_string('animation-style', ANIMATION_STYLES[animation.selected]));
+        behavior.add(animation);
 
         const notifications = new Adw.SwitchRow({
             title: _('Notifications in the island'),
