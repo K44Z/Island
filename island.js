@@ -63,8 +63,9 @@ const EVENT_DEFAULT_LENGTH = 3600;
 const EVENT_DEFAULT_HOUR = 9;
 
 const EQ_BARS = 4;
-const EQ_INTERVAL = 170;
-const PROGRESS_INTERVAL = 500;
+const EQ_INTERVAL = 250;
+const EQ_EASE = 120;
+const PROGRESS_INTERVAL = 1000;
 const POSITION_INTERVAL = 2000;
 
 function formatTime(us) {
@@ -308,7 +309,7 @@ class Island extends St.Widget {
         const alpha = this._settings.get_int('background-opacity') / 100;
         this._backgroundStyle = transparent && !bms ? `background-color: rgba(0, 0, 0, ${alpha});` : '';
         this._syncBlur(bms).catch(logError);
-        this._updateRadius();
+        this._updateRadius(true);
     }
 
     // shortcut: drives Blur my Shell's internal DynamicPipeline, may need updating when it changes.
@@ -333,7 +334,7 @@ class Island extends St.Widget {
         this._blur = new DynamicPipeline(bms._effects_manager, bms._pipelines_manager,
             bms._settings.popup.PIPELINE, {corner_radius: 0});
         this._blur.attach_to_container(this, 'island-blur');
-        this._updateRadius();
+        this._updateRadius(true);
     }
 
     _buildCalendar() {
@@ -346,17 +347,6 @@ class Island extends St.Widget {
             visible: false,
         });
         this._clip.add_child(this._calendarBox);
-
-        this._eventSource = Main.sessionMode.showCalendarEvents
-            ? new Calendar.DBusEventSource()
-            : new Calendar.EmptyEventSource();
-        this._eventSource.connectObject('changed', () => this._reloadEvents(), this);
-
-        this._calendar = new Calendar.Calendar();
-        this._calendar.setEventSource(this._eventSource);
-        this._calendar.connect('selected-date-changed',
-            (_calendar, datetime) => this._showEvents(new Date(datetime.to_unix() * 1000)));
-        this._calendarBox.add_child(this._calendar);
 
         const header = new St.BoxLayout({style_class: 'island-events-header'});
         this._eventsTitle = new St.Label({
@@ -388,6 +378,26 @@ class Island extends St.Widget {
 
         const now = new Date();
         this._eventsDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    }
+
+    // The calendar and its event source (a D-Bus client of Evolution Data
+    // Server) are only created the first time the calendar is opened.
+    _ensureCalendar() {
+        if (this._calendar)
+            return;
+        this._eventSource = Main.sessionMode.showCalendarEvents
+            ? new Calendar.DBusEventSource()
+            : new Calendar.EmptyEventSource();
+        this._eventSource.connectObject('changed', () => {
+            if (this._view === 'calendar')
+                this._reloadEvents();
+        }, this);
+
+        this._calendar = new Calendar.Calendar();
+        this._calendar.setEventSource(this._eventSource);
+        this._calendar.connect('selected-date-changed',
+            (_calendar, datetime) => this._showEvents(new Date(datetime.to_unix() * 1000)));
+        this._calendarBox.insert_child_at_index(this._calendar, 0);
     }
 
     _buildEventForm() {
@@ -605,6 +615,7 @@ class Island extends St.Widget {
     }
 
     _resetCalendar() {
+        this._ensureCalendar();
         const today = new Date();
         this._calendar.setDate(today);
         this._showEvents(today);
@@ -1505,6 +1516,9 @@ class Island extends St.Widget {
         this._resizing = true;
         const done = () => {
             this._resizing = false;
+            // _reposition only re-syncs hover on width changes; a height-only resize
+            // (one notification replacing another) can leave hover stuck on too.
+            this.sync_hover();
         };
         if (this._gnomeAnimations) {
             this.ease({
@@ -1570,8 +1584,10 @@ class Island extends St.Widget {
         // crossing event, so `hover` can get stuck true (most noticeably: a
         // notification that never auto-dismisses because _scheduleNotificationEnd
         // refuses to arm while hover is true). Re-sync it against the pointer's
-        // actual position every time we move.
-        this.sync_hover();
+        // actual position every time we move. Not on every frame of a resize
+        // animation: its `done` callback syncs once at the end.
+        if (!this._resizing)
+            this.sync_hover();
     }
 
     _syncTime() {
@@ -1636,8 +1652,12 @@ class Island extends St.Widget {
         }
     }
 
-    _updateRadius() {
+    // Runs on every frame of a resize, so it does nothing unless the radius moved.
+    _updateRadius(force = false) {
         const radius = Math.round(Math.min(this.height / 2, this._maxRadius ?? EXPANDED_RADIUS));
+        if (radius === this._radius && !force)
+            return;
+        this._radius = radius;
         this.set_style(`border-radius: ${radius}px;${this._backgroundStyle ?? ''}`);
         // The tint sits on the content so it paints over the blur, not under it.
         this._clip.set_style(this._blurOwner ? `border-radius: ${radius}px;${BLUR_TINT}` : null);
@@ -2093,6 +2113,7 @@ class Island extends St.Widget {
             this._reposition();
         }
         this._updateClock(false);
+        this._syncTimers();
         if (!suppressed)
             this._pullNotifications();
     }
@@ -2356,7 +2377,7 @@ class Island extends St.Widget {
     }
 
     _syncTimers() {
-        const playing = this._shown && !!this._player?.isPlaying;
+        const playing = this._shown && !this._suppressed && !!this._player?.isPlaying;
 
         if (playing && this._view === 'compact') {
             if (!this._timeouts.has('eq'))
@@ -2383,7 +2404,7 @@ class Island extends St.Widget {
         for (const bar of this._eqBars) {
             bar.ease({
                 scale_y: active ? 0.25 + Math.random() * 0.75 : 0.3,
-                duration: active ? EQ_INTERVAL : 300,
+                duration: active ? EQ_EASE : 300,
                 mode: Clutter.AnimationMode.EASE_IN_OUT_SINE,
             });
         }
@@ -2421,8 +2442,8 @@ class Island extends St.Widget {
         const clock = Main.panel.statusArea.dateMenu?.container;
         clock?.remove_transition('opacity');
         clock?.set({opacity: 255, visible: true});
-        this._eventSource.disconnectObject(this);
-        this._eventSource.destroy();
+        this._eventSource?.disconnectObject(this);
+        this._eventSource?.destroy();
         this._wallClock.disconnectObject(this);
         this._wallClock.run_dispose();
         this._wallClock = null;

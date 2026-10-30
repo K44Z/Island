@@ -132,7 +132,7 @@ export const NotificationHistory = GObject.registerClass({
     refresh() {
         this._scroll.vadjustment.value = 0;
         this._notifications().forEach(n => this._seen.add(n));
-        this._rebuild();
+        this._rebuild(true);
     }
 
     _watch(source) {
@@ -159,8 +159,9 @@ export const NotificationHistory = GObject.registerClass({
         return all.sort((a, b) => time(b) - time(a)).slice(0, MAX_ITEMS);
     }
 
-    _rebuild() {
-        this._list.destroy_all_children();
+    // While the card is hidden only the unread flag is kept current; the
+    // widgets are built when it opens (see refresh()).
+    _rebuild(force = false) {
         const notifications = this._notifications();
 
         // Anything listed while the card is on screen counts as read.
@@ -171,7 +172,10 @@ export const NotificationHistory = GObject.registerClass({
             this.unread = unread;
             this.emit('unread-changed');
         }
+        if (!force && !this.mapped)
+            return;
 
+        this._list.destroy_all_children();
         for (const notification of notifications)
             this._list.add_child(this._buildItem(notification));
 

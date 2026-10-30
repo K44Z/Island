@@ -8,7 +8,7 @@ Gio._promisify(Gio.File.prototype, 'enumerate_children_async');
 Gio._promisify(Gio.FileEnumerator.prototype, 'next_files_async');
 Gio._promisify(Gio.File.prototype, 'delete_async');
 
-const MAX_CACHED = 200;
+const MAX_CACHED = 50;
 
 const UNSAFE_PATH = /["\\\n]/;
 
@@ -16,7 +16,7 @@ export class ArtCache {
     constructor() {
         this._dir = Gio.File.new_for_path(
             GLib.build_filenamev([GLib.get_user_cache_dir(), 'island', 'art']));
-        this._session = new Soup.Session({timeout: 10});
+        this._session = null;
         this._cancellable = new Gio.Cancellable();
         this._pending = new Map();
         this._prune();
@@ -24,7 +24,7 @@ export class ArtCache {
 
     destroy() {
         this._cancellable.cancel();
-        this._session.abort();
+        this._session?.abort();
         this._pending.clear();
     }
 
@@ -56,6 +56,8 @@ export class ArtCache {
             return file.get_path();
 
         try {
+            // Created on first download, so a session without remote covers never loads libsoup's state.
+            this._session ??= new Soup.Session({timeout: 10, idle_timeout: 5});
             const message = Soup.Message.new('GET', url);
             if (!message)
                 return null;

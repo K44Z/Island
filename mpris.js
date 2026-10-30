@@ -9,20 +9,6 @@ const PLAYER_IFACE = 'org.mpris.MediaPlayer2.Player';
 
 const IGNORED_PLAYERS = new Set([`${MPRIS_PREFIX}playerctld`]);
 
-const DBusIface = `
-<node>
-  <interface name="org.freedesktop.DBus">
-    <method name="ListNames">
-      <arg type="as" direction="out" name="names"/>
-    </method>
-    <signal name="NameOwnerChanged">
-      <arg type="s" name="name"/>
-      <arg type="s" name="oldOwner"/>
-      <arg type="s" name="newOwner"/>
-    </signal>
-  </interface>
-</node>`;
-
 const MprisIface = `
 <node>
   <interface name="org.mpris.MediaPlayer2">
@@ -63,7 +49,6 @@ const PlayerIface = `
   </interface>
 </node>`;
 
-const DBusProxy = Gio.DBusProxy.makeProxyWrapper(DBusIface);
 const MprisProxy = Gio.DBusProxy.makeProxyWrapper(MprisIface);
 const PlayerProxy = Gio.DBusProxy.makeProxyWrapper(PlayerIface);
 
@@ -373,17 +358,24 @@ export const PlayerManager = GObject.registerClass({
 
     async _watchBus() {
         try {
-            this._proxy = await DBusProxy.newAsync(Gio.DBus.session,
-                'org.freedesktop.DBus', '/org/freedesktop/DBus', this._cancellable);
-            this._ownerChangedId = this._proxy.connectSignal('NameOwnerChanged',
-                (_proxy, _sender, [name, oldOwner, newOwner]) => {
+            const bus = Gio.DBus.session;
+            // Only MPRIS names, so the shell isn't woken for every client that joins the bus.
+            this._ownerChangedId = bus.signal_subscribe(
+                'org.freedesktop.DBus', 'org.freedesktop.DBus', 'NameOwnerChanged',
+                '/org/freedesktop/DBus', MPRIS_PREFIX.slice(0, -1),
+                Gio.DBusSignalFlags.MATCH_ARG0_NAMESPACE,
+                (_bus, _sender, _path, _iface, _signal, params) => {
+                    const [name, oldOwner, newOwner] = params.deepUnpack();
                     if (oldOwner)
                         this._removePlayer(name);
                     if (newOwner)
                         this._addPlayer(name);
                 });
-            const [names] = await this._proxy.ListNamesAsync();
-            names.forEach(name => this._addPlayer(name));
+            const reply = await bus.call(
+                'org.freedesktop.DBus', '/org/freedesktop/DBus', 'org.freedesktop.DBus',
+                'ListNames', null, new GLib.VariantType('(as)'),
+                Gio.DBusCallFlags.NONE, -1, this._cancellable);
+            reply.deepUnpack()[0].forEach(name => this._addPlayer(name));
         } catch (e) {
             if (!e.matches?.(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED))
                 console.error(`Island: failed to watch the session bus: ${e.message}`);
@@ -393,8 +385,7 @@ export const PlayerManager = GObject.registerClass({
     destroy() {
         this._cancellable.cancel();
         if (this._ownerChangedId)
-            this._proxy.disconnectSignal(this._ownerChangedId);
-        this._proxy = null;
+            Gio.DBus.session.signal_unsubscribe(this._ownerChangedId);
         for (const player of this._players.values())
             player.destroy();
         this._players.clear();
