@@ -1596,9 +1596,8 @@ class Island extends St.Widget {
             this.y = y;
 
         // Resizing the actor under a stationary pointer doesn't fire a
-        // crossing event, so `hover` can get stuck true (most noticeably: a
-        // notification that never auto-dismisses because _scheduleNotificationEnd
-        // refuses to arm while hover is true). Re-sync it against the pointer's
+        // crossing event, so `hover` can get stuck true (e.g. the card never
+        // auto-collapsing). Re-sync it against the pointer's
         // actual position on every non-animated move/resize. Not on every frame
         // of a resize animation: its `done` callback syncs once at the end.
         if (!this._resizing)
@@ -1947,16 +1946,27 @@ class Island extends St.Widget {
             this._resize(true);
     }
 
+    // Always armed, and checks the real pointer when it fires: `hover` can get
+    // stuck on (resizes, grabs) and would otherwise keep the notification forever.
     _scheduleNotificationEnd(delay) {
         this._clearTimeout('notification');
         const notification = this._notification;
-        // A resize under a still pointer can leave hover stuck on, which would keep the notification forever.
-        this.sync_hover();
-        if (!notification || this.hover)
+        if (!notification)
             return;
         if (notification.urgency === MessageTray.Urgency.CRITICAL)
             delay *= CRITICAL_NOTIFICATION_FACTOR;
-        this._startTimeout('notification', delay, () => this._endNotification());
+        this._startTimeout('notification', delay, () => {
+            if (this._pointerOver())
+                this._scheduleNotificationEnd(NOTIFICATION_LINGER);
+            else
+                this._endNotification();
+        });
+    }
+
+    _pointerOver() {
+        const [x, y] = global.get_pointer();
+        const [ok, lx, ly] = this.transform_stage_point(x, y);
+        return ok && lx >= 0 && ly >= 0 && lx < this.width && ly < this.height;
     }
 
     _dismissNotification() {
@@ -2042,9 +2052,7 @@ class Island extends St.Widget {
 
     _onHoverChanged() {
         if (this._notification) {
-            if (this.hover)
-                this._clearTimeout('notification');
-            else
+            if (!this.hover)
                 this._scheduleNotificationEnd(NOTIFICATION_LINGER);
             this._updateVisibility();
             return;
