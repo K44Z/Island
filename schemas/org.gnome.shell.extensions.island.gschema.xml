@@ -55,6 +55,11 @@
       <summary>Blur the background like GNOME's menus</summary>
       <description>Reuses Blur my Shell's popup blur so the island matches the quick settings and calendar. Has no effect when Blur my Shell is not enabled.</description>
     </key>
+    <key name="liquid-glass" type="b">
+      <default>false</default>
+      <summary>Liquid glass look</summary>
+      <description>Frosted, light-catching glass surface with a specular rim. Overrides the transparent background; uses Blur my Shell's blur when "Blur like GNOME menus" is on.</description>
+    </key>
     <key name="todos" type="s">
       <default>'[]'</default>
       <summary>Todo items, as a JSON array of {id, text, done, priority}</summary>

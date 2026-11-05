@@ -178,6 +178,13 @@ export default class IslandPreferences extends ExtensionPreferences {
         settings.bind('blur-background', blur, 'active', Gio.SettingsBindFlags.DEFAULT);
         behavior.add(blur);
 
+        const glass = new Adw.SwitchRow({
+            title: _('Liquid glass'),
+            subtitle: _('Frosted glass surface with a bright rim; pairs well with blur'),
+        });
+        settings.bind('liquid-glass', glass, 'active', Gio.SettingsBindFlags.DEFAULT);
+        behavior.add(glass);
+
         const seek = new Adw.SpinRow({
             title: _('Seek step'),
             subtitle: _('Seconds to skip backward or forward'),

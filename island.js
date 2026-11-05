@@ -34,6 +34,10 @@ const PANEL_GAP = 6;
 const BLUR_MY_SHELL_UUID = 'blur-my-shell@aunetx';
 // Blur my Shell's dark popup surface tint, drawn over its blur.
 const BLUR_TINT = 'background-color: rgba(30, 30, 33, 0.5);';
+// Liquid glass: light catching the top edge, fading to a dark base so text stays readable.
+const GLASS_TINT = 'background-gradient-direction: vertical; '
+    + 'background-gradient-start: rgba(255, 255, 255, 0.22); '
+    + 'background-gradient-end: rgba(20, 22, 30, 0.38);';
 
 const EXPAND_DURATION = 420;
 const SETTLE_OVERSHOOT = 0.02;
@@ -200,6 +204,14 @@ class Island extends St.Widget {
             pivot_point: new Graphene.Point({x: 0.5, y: 0}),
         });
 
+        // Centers on the primary monitor inside the layout pass, so a resize
+        // animation needs no per-frame JS to keep the island centered.
+        this.add_constraint(new Clutter.AlignConstraint({
+            source: Main.layoutManager.panelBox,
+            align_axis: Clutter.AlignAxis.X_AXIS,
+            factor: 0.5,
+        }));
+
         this._settings = settings;
         this._manager = manager;
         this._blip = blip;
@@ -229,7 +241,6 @@ class Island extends St.Widget {
         this._buildUi();
 
         this.connect('notify::hover', () => this._onHoverChanged());
-        this.connect('notify::width', () => this._reposition());
         this.connect('notify::height', () => this._updateRadius());
         this.connect('destroy', () => this._onDestroy());
 
@@ -252,7 +263,8 @@ class Island extends St.Widget {
             'changed::show-blip-transfers', () => this._syncSendButton(),
             'changed::transparent-background', () => this._updateTransparency(),
             'changed::background-opacity', () => this._updateTransparency(),
-            'changed::blur-background', () => this._updateTransparency(), this);
+            'changed::blur-background', () => this._updateTransparency(),
+            'changed::liquid-glass', () => this._updateTransparency(), this);
         Main.extensionManager.connectObject('extension-state-changed', (_m, extension) => {
             if (extension.uuid === BLUR_MY_SHELL_UUID)
                 this._updateTransparency();
@@ -304,10 +316,12 @@ class Island extends St.Widget {
     _updateTransparency() {
         const bms = this._settings.get_boolean('blur-background') ? global.blur_my_shell ?? null : null;
         const transparent = this._settings.get_boolean('transparent-background');
-        this.set_style_class_name(bms ? 'island island-blurred'
-            : transparent ? 'island island-transparent' : 'island');
+        const glass = this._settings.get_boolean('liquid-glass');
+        this._tint = glass ? GLASS_TINT : BLUR_TINT;
+        this.set_style_class_name(`island${bms ? ' island-blurred' : glass ? '' : transparent ? ' island-transparent' : ''}${glass ? ' island-glass' : ''}`);
         const alpha = this._settings.get_int('background-opacity') / 100;
-        this._backgroundStyle = transparent && !bms ? `background-color: rgba(0, 0, 0, ${alpha});` : '';
+        this._backgroundStyle = bms ? '' : glass ? GLASS_TINT
+            : transparent ? `background-color: rgba(0, 0, 0, ${alpha});` : '';
         this._syncBlur(bms).catch(logError);
         this._updateRadius(true);
     }
@@ -1577,15 +1591,16 @@ class Island extends St.Widget {
         const y = this._topBar
             ? monitor.y + Math.round((panelHeight - this._compactHeight) / 2)
             : monitor.y + panelHeight + this._gap;
-        const x = monitor.x + Math.round((monitor.width - this.width) / 2);
-        this.set_position(x, y);
+        // x comes from the AlignConstraint.
+        if (this.y !== y)
+            this.y = y;
 
-        // Moving/resizing the actor under a stationary pointer doesn't fire a
+        // Resizing the actor under a stationary pointer doesn't fire a
         // crossing event, so `hover` can get stuck true (most noticeably: a
         // notification that never auto-dismisses because _scheduleNotificationEnd
         // refuses to arm while hover is true). Re-sync it against the pointer's
-        // actual position every time we move. Not on every frame of a resize
-        // animation: its `done` callback syncs once at the end.
+        // actual position on every non-animated move/resize. Not on every frame
+        // of a resize animation: its `done` callback syncs once at the end.
         if (!this._resizing)
             this.sync_hover();
     }
@@ -1660,7 +1675,7 @@ class Island extends St.Widget {
         this._radius = radius;
         this.set_style(`border-radius: ${radius}px;${this._backgroundStyle ?? ''}`);
         // The tint sits on the content so it paints over the blur, not under it.
-        this._clip.set_style(this._blurOwner ? `border-radius: ${radius}px;${BLUR_TINT}` : null);
+        this._clip.set_style(this._blurOwner ? `border-radius: ${radius}px;${this._tint}` : null);
         // Blur my Shell scales the radius itself.
         this._blur?.set_corner_radius(radius / St.ThemeContext.get_for_stage(global.stage).scale_factor);
     }
