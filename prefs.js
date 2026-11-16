@@ -185,6 +185,13 @@ export default class IslandPreferences extends ExtensionPreferences {
         settings.bind('liquid-glass', glass, 'active', Gio.SettingsBindFlags.DEFAULT);
         behavior.add(glass);
 
+        const clearBar = new Adw.SwitchRow({
+            title: _('Transparent top bar'),
+            subtitle: _('Make the top bar transparent when no window is near it'),
+        });
+        settings.bind('transparent-top-bar', clearBar, 'active', Gio.SettingsBindFlags.DEFAULT);
+        behavior.add(clearBar);
+
         const seek = new Adw.SpinRow({
             title: _('Seek step'),
             subtitle: _('Seconds to skip backward or forward'),

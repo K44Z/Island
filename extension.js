@@ -1,3 +1,4 @@
+import GLib from 'gi://GLib';
 import Meta from 'gi://Meta';
 import Shell from 'gi://Shell';
 
@@ -7,6 +8,8 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import {BlipWatcher} from './blip.js';
 import {PlayerManager} from './mpris.js';
 import {Island} from './island.js';
+
+const NEAR_PX = 8;
 
 export default class IslandExtension extends Extension {
     enable() {
@@ -22,6 +25,8 @@ export default class IslandExtension extends Extension {
         Main.layoutManager.addChrome(this._island);
         this._island.start();
         this._blip.start();
+
+        this._watchPanel();
 
         const island = this._island;
         this._injectionManager = new InjectionManager();
@@ -61,7 +66,85 @@ export default class IslandExtension extends Extension {
         }
     }
 
+    // Panel goes transparent when no window sits at the top of its monitor.
+    _watchPanel() {
+        const apply = () => {
+            const panel = Main.panel;
+            const monitor = Main.layoutManager.primaryIndex;
+            const limit = panel.height + NEAR_PX;
+            const area = Main.layoutManager.primaryMonitor;
+            const ws = global.workspace_manager.get_active_workspace();
+            const near = ws.list_windows().some(w => {
+                if (w.minimized || w.get_monitor() !== monitor)
+                    return false;
+                if (w.window_type === Meta.WindowType.DESKTOP || w.window_type === Meta.WindowType.DOCK)
+                    return false;
+                return w.get_frame_rect().y - area.y < limit;
+            });
+            const clear = this._settings.get_boolean('transparent-top-bar') && !near;
+            if (clear)
+                panel.set_style('background-color: transparent;');
+            else
+                panel.set_style(null);
+        };
+        // Re-check after animations settle; window geometry lags the signals.
+        const update = () => {
+            apply();
+            if (this._panelTimer)
+                GLib.source_remove(this._panelTimer);
+            this._panelTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 350, () => {
+                this._panelTimer = 0;
+                apply();
+                return GLib.SOURCE_REMOVE;
+            });
+        };
+
+        const track = actor => {
+            actor.connectObject(
+                'notify::position', update,
+                'notify::size', update,
+                'notify::visible', update,
+                this);
+        };
+        global.get_window_actors().forEach(track);
+        global.display.connectObject(
+            'window-created', (_d, w) => {
+                const a = w.get_compositor_private();
+                if (a)
+                    track(a);
+                update();
+            },
+            'restacked', update,
+            'notify::focus-window', update,
+            this);
+        global.workspace_manager.connectObject('workspace-switched', update, this);
+        global.window_manager.connectObject(
+            'switch-workspace', update,
+            'size-changed', update,
+            'map', update,
+            'minimize', update,
+            'unminimize', update,
+            'destroy', update,
+            this);
+        Main.layoutManager.connectObject('monitors-changed', update, this);
+        Main.panel.connectObject('notify::height', update, this);
+        this._settings.connectObject('changed::transparent-top-bar', update, this);
+        update();
+    }
+
     disable() {
+        global.get_window_actors().forEach(a => a.disconnectObject(this));
+        global.display.disconnectObject(this);
+        global.workspace_manager.disconnectObject(this);
+        global.window_manager.disconnectObject(this);
+        Main.layoutManager.disconnectObject(this);
+        Main.panel.disconnectObject(this);
+        this._settings.disconnectObject(this);
+        Main.panel.set_style(null);
+        if (this._panelTimer)
+            GLib.source_remove(this._panelTimer);
+        this._panelTimer = 0;
+
         this._injectionManager.clear();
         this._injectionManager = null;
 
