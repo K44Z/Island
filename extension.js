@@ -126,6 +126,14 @@ export default class IslandExtension extends Extension {
             'unminimize', update,
             'destroy', update,
             this);
+        // Leaving the overview restyles the panel black; drop the cached inline style so it re-applies.
+        Main.overview.connectObject(
+            'hidden', () => {
+                Main.panel.set_style(null);
+                update();
+            },
+            'showing', update,
+            this);
         Main.layoutManager.connectObject('monitors-changed', update, this);
         Main.panel.connectObject('notify::height', update, this);
         this._settings.connectObject('changed::transparent-top-bar', update, this);
@@ -137,6 +145,7 @@ export default class IslandExtension extends Extension {
         global.display.disconnectObject(this);
         global.workspace_manager.disconnectObject(this);
         global.window_manager.disconnectObject(this);
+        Main.overview.disconnectObject(this);
         Main.layoutManager.disconnectObject(this);
         Main.panel.disconnectObject(this);
         this._settings.disconnectObject(this);
